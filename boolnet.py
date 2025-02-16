@@ -3,9 +3,11 @@ import pandas as pd
 from sklearn.cluster import KMeans
 import itertools
 from itertools import combinations
+from itertools import product
 import random
 import matplotlib.pyplot as plt
 import networkx as nx 
+from typing import List, Optional, Union
 
 #binary_time_series function
 def edge_detector(gene, scaling=1, edge_type="firstEdge"):
@@ -386,223 +388,187 @@ def getAttractorSequence(attractorInfo, attractorNo=None):
         
         return {attractorInfo['stateInfo']['genes'][i]: binMatrix[:, i] for i in range(numGenes)}
 
-def dec2bin(decimal, numGenes):
-    return [int(bit) for bit in format(decimal, f'0{numGenes}b')]
+def dec2bin(decimal: int, num_bits: int, output_type: str = 'array') -> Union[List[int], np.ndarray]:
+    
+    # Input validation
+   if not isinstance(decimal, (int, np.integer)):
+       raise TypeError(f"decimal must be integer, got {type(decimal)}")
+   if not isinstance(num_bits, (int, np.integer)):
+       raise TypeError(f"num_bits must be integer, got {type(num_bits)}")
+   if decimal < 0:
+       raise ValueError("decimal must be non-negative")
+   if decimal >= (1 << num_bits):
+       raise ValueError(f"decimal value {decimal} exceeds the maximum for {num_bits} bits")
+   
+   bin_str = format(decimal, f'0{num_bits}b')  
+   bin_list = [int(bit) for bit in bin_str] 
+   if output_type == 'array':
+        return np.array(bin_list, dtype=int)
+   elif output_type == 'list':
+        return bin_list
+   else:
+        raise ValueError("output_type must be either 'array' or 'list'")
+
 
 #getAttractors
-def get_attractors(network, type="synchronous", method="exhaustive", start_states=None, genes_on=None, genes_off=None, canonical=True, random_chain_length=10000, avoid_self_loops=True, gene_probabilities=None, max_attractor_length=None, return_table=True):
-    if genes_on is None:
-        genes_on = []
-    if genes_off is None:
-        genes_off = []
-    if start_states is None:
-        start_states = []
 
-    non_fixed_positions = [i for i, val in enumerate(network['fixed']) if val == -1]
+def get_attractors(network, type="synchronous", method="exhaustive", startStates=[], genesON=[], genesOFF=[],
+                  canonical=True, randomChainLength=10000, avoidSelfLoops=True, geneProbabilities=None,
+                  maxAttractorLength=None, returnTable=True):
+    if not isinstance(network, dict) or "genes" not in network or "interactions" not in network or "fixed" not in network:
+        raise ValueError("Invalid network structure")
+
+    if genesON:
+        for gene in genesON:
+            if gene in network["genes"]:
+                network["fixed"][network["genes"].index(gene)] = 1
+    if genesOFF:
+        for gene in genesOFF:
+            if gene in network["genes"]:
+                network["fixed"][network["genes"].index(gene)] = 0
+
+    nonFixedPositions = [i for i, val in enumerate(network["fixed"]) if val == -1]
 
     if type == "asynchronous":
-        if 'SymbolicBooleanNetwork' in network:
-            raise ValueError("Only synchronous updates are allowed for symbolic networks!")
         if method == "exhaustive":
-            raise ValueError("Asynchronous attractor search cannot be performed in exhaustive search mode!")
-        if gene_probabilities:
-            if len(gene_probabilities) != len(network['genes']):
-                raise ValueError("Please supply exactly one probability for each gene!")
-            if abs(1.0 - sum(gene_probabilities)) > 0.0001:
-                raise ValueError("The supplied gene probabilities do not sum up to 1!")
+            raise ValueError("Asynchronous exhaustive search not supported")
+        if geneProbabilities and len(geneProbabilities) != len(network["genes"]):
+            raise ValueError("Invalid gene probabilities")
+        if geneProbabilities and abs(1.0 - sum(geneProbabilities)) > 0.0001:
+            raise ValueError("Gene probabilities must sum to 1")
 
-    if max_attractor_length is None or np.isinf(max_attractor_length):
-        max_attractor_length = None
+    if maxAttractorLength is None:
+        maxAttractorLength = float('inf')
 
-    if method not in ["exhaustive", "sat.exhaustive", "sat.restricted", "random", "chosen"]:
-        if type == "asynchronous" and not start_states:
-            start_states = max(round(2 ** len(non_fixed_positions) / 20), 5)
+    if isinstance(method, list):
+        if type == "asynchronous" and not startStates:
+            startStates = max(round(2 ** len(nonFixedPositions) / 20), 5)
             method = "random"
-        elif isinstance(start_states, (int, float)):
+        elif isinstance(startStates, (int, float)):
             method = "random"
-        elif isinstance(start_states, list) and start_states:
+        elif isinstance(startStates, list) and startStates:
             method = "chosen"
-        elif max_attractor_length is not None:
+        elif maxAttractorLength is not None:
             method = "sat.restricted"
         else:
             method = "exhaustive"
 
-    if genes_on:
-        network = fix_genes(network, genes_on, 1)
-    if genes_off:
-        network = fix_genes(network, genes_off, 0)
+    if method == "sat.restricted" and maxAttractorLength is None:
+        raise ValueError("maxAttractorLength required for sat.restricted")
 
-    if 'SymbolicBooleanNetwork' in network:
-        return simulate_symbolic_model(network, method, start_states, max_attractor_length, return_table and method not in ["sat.exhaustive", "sat.restricted"], False, True, canonical)
-
-    if method == "sat.restricted" and max_attractor_length is None:
-        raise ValueError("max_attractor_length must be set for method=\"sat.restricted\"!")
-
-    if len(network['genes']) > 29 and method == "exhaustive" and type == "synchronous":
+    if len(network["genes"]) > 29 and method == "exhaustive" and type == "synchronous":
         method = "sat.exhaustive"
-        print("Warning: Switching to SAT-based exhaustive search for networks with more than 29 genes.")
+        print("Switching to SAT-based exhaustive search")
+    elif method in ["sat.exhaustive", "sat.restricted"] and type != "synchronous":
+        raise ValueError("SAT-based search requires synchronous updates")
 
-    if method in ["sat.exhaustive", "sat.restricted"] and type != "synchronous":
-        raise ValueError("SAT-based search can only be used for synchronous networks!")
-
-    if method == "random":
-        if not isinstance(start_states, (int, float)):
-            raise ValueError("Please supply the number of random states in start_states!")
-        if start_states > (2 ** len(non_fixed_positions)):
-            if type == "synchronous":
-                start_states = []
-                print("Warning: Performing an exhaustive search due to large number of random states.")
-            else:
-                print(f"Warning: Maximum number of different states is {2 ** len(non_fixed_positions)}!")
-                start_states = 2 ** len(non_fixed_positions)
-        start_states = generate_random_start_states(network, start_states)
+    if method == "exhaustive":
+        startStates = []
+    elif method == "random":
+        if not isinstance(startStates, (int, float)):
+            raise ValueError("startStates must be a number for random method")
+        startStates = generateRandomStartStates(network, startStates)
     elif method == "chosen":
-        if not isinstance(start_states, list) or not start_states:
-            raise ValueError("No start states supplied!")
-        if not all(len(state) == len(network['genes']) for state in start_states):
-            raise ValueError(f"Please provide binary vectors with {len(network['genes'])} elements in start_states!")
-        fixed_genes = [i for i, val in enumerate(network['fixed']) if val != -1]
-        valid_states = [state for state in start_states if all(state[i] == network['fixed'][i] for i in fixed_genes)]
-        if not valid_states:
-            raise ValueError("None of the supplied start states matched the restrictions of the fixed genes!")
-        if len(valid_states) != len(start_states):
-            print("Warning: Some start states did not match the restrictions of the fixed genes and were removed!")
-        start_states = valid_states
+        if not isinstance(startStates, list) or not startStates:
+            raise ValueError("startStates must be a list for chosen method")
+        startStates = validateStartStates(network, startStates)
 
-    if max_attractor_length is not None and method not in ["sat.exhaustive", "sat.restricted"]:
-        raise ValueError("max_attractor_length can only be used with method=\"sat.exhaustive\" or method=\"sat.restricted\"!")
+    convertedStartStates = [bin2dec(state, len(network["genes"])) for state in startStates] if startStates else None
 
-    converted_start_states = [bin2dec(state, len(network['genes'])) for state in start_states] if start_states else []
+    inputGenes = [gene for interaction in network["interactions"] for gene in interaction["input"]]
+    inputGenePositions = np.cumsum([0] + [len(interaction["input"]) for interaction in network["interactions"]])
 
-    input_genes = [gene for interaction in network['interactions'] for gene in interaction['input']]
-    input_gene_positions = np.cumsum([0] + [len(interaction['input']) for interaction in network['interactions']]).tolist()
+    transitionFunctions = [func for interaction in network["interactions"] for func in interaction["func"]]
+    transitionFunctionPositions = np.cumsum([0] + [len(interaction["func"]) for interaction in network["interactions"]])
 
-    transition_functions = [func for interaction in network['interactions'] for func in interaction['func']]
-    transition_function_positions = np.cumsum([0] + [len(interaction['func']) for interaction in network['interactions']]).tolist()
+    searchType = {
+        "synchronous": 2 if method == "sat.exhaustive" else 3 if method == "sat.restricted" else 0,
+        "asynchronous": 1
+    }.get(type, 0)
 
-    search_type = 0
-    if type == "synchronous":
-        if method == "sat.exhaustive":
-            search_type = 2
-        elif method == "sat.restricted":
-            search_type = 3
-    elif type == "asynchronous":
-        search_type = 1
-
-    result = get_attractors_c(input_genes, input_gene_positions, transition_functions, transition_function_positions, network['fixed'], converted_start_states, search_type, gene_probabilities, random_chain_length, avoid_self_loops, return_table, max_attractor_length)
+    result = getAttractors_C(inputGenes, inputGenePositions, transitionFunctions, transitionFunctionPositions,
+                             network["fixed"], convertedStartStates, searchType, geneProbabilities, randomChainLength,
+                             avoidSelfLoops, returnTable, maxAttractorLength)
 
     if not result:
-        raise ValueError("An error occurred in external code!")
+        raise ValueError("C code error")
 
-    if not result['attractors']:
-        raise ValueError("No attractors were identified! Check the parameters and restart.")
+    if not result["attractors"]:
+        raise ValueError("No attractors found")
 
-    num_elements_per_entry = len(network['genes']) // 32 + (1 if len(network['genes']) % 32 != 0 else 0)
+    numElementsPerEntry = len(network["genes"]) // 32 + (1 if len(network["genes"]) % 32 else 0)
 
-    if 'stateInfo' in result:
-        result['stateInfo']['table'] = np.reshape(result['stateInfo']['table'], (num_elements_per_entry, -1))
-        if 'initialStates' in result['stateInfo']:
-            result['stateInfo']['initialStates'] = np.reshape(result['stateInfo']['initialStates'], (num_elements_per_entry, -1))
+    if result["stateInfo"]:
+        result["stateInfo"]["table"] = np.reshape(result["stateInfo"]["table"], (numElementsPerEntry, -1))
+        if result["stateInfo"]["initialStates"]:
+            result["stateInfo"]["initialStates"] = np.reshape(result["stateInfo"]["initialStates"], (numElementsPerEntry, -1))
 
-    for attractor in result['attractors']:
-        attractor['involvedStates'] = np.reshape(attractor['involvedStates'], (num_elements_per_entry, -1))
+    for attractor in result["attractors"]:
+        attractor["involvedStates"] = np.reshape(attractor["involvedStates"], (numElementsPerEntry, -1))
         if canonical:
-            attractor['involvedStates'] = canonical_state_order(attractor['involvedStates'])
-        if 'initialStates' in attractor:
-            attractor['initialStates'] = np.reshape(attractor['initialStates'], (num_elements_per_entry, -1))
-        if 'nextStates' in attractor:
-            attractor['nextStates'] = np.reshape(attractor['nextStates'], (num_elements_per_entry, -1))
-        if attractor['basinSize'] == 0:
-            attractor['basinSize'] = None
+            attractor["involvedStates"] = canonicalStateOrder(attractor["involvedStates"])
+        if attractor["initialStates"]:
+            attractor["initialStates"] = np.reshape(attractor["initialStates"], (numElementsPerEntry, -1))
+        if attractor["nextStates"]:
+            attractor["nextStates"] = np.reshape(attractor["nextStates"], (numElementsPerEntry, -1))
+        if attractor["basinSize"] == 0:
+            attractor["basinSize"] = None
 
-    attractor_lengths = [len(attractor['involvedStates']) for attractor in result['attractors']]
-    reordering = np.argsort(attractor_lengths)
-    result['attractors'] = [result['attractors'][i] for i in reordering]
+    attractorLengths = [len(attractor["involvedStates"]) for attractor in result["attractors"]]
+    reordering = np.argsort(attractorLengths)
+    result["attractors"] = [result["attractors"][i] for i in reordering]
 
-    if 'stateInfo' in result:
-        inverse_order = [np.where(reordering == i)[0][0] for i in range(len(reordering))]
-        result['stateInfo']['attractorAssignment'] = [inverse_order[i] for i in result['stateInfo']['attractorAssignment']]
+    if result["stateInfo"]:
+        inverseOrder = [np.where(reordering == i)[0][0] for i in range(len(reordering))]
+        result["stateInfo"]["attractorAssignment"] = [inverseOrder[i] for i in result["stateInfo"]["attractorAssignment"]]
 
-    result['stateInfo']['genes'] = network['genes']
-    result['stateInfo']['fixedGenes'] = network['fixed']
-
-    if 'table' in result['stateInfo']:
-        result['stateInfo'].__class__ = 'BooleanStateInfo'
-    result.__class__ = 'AttractorInfo'
+    result["stateInfo"]["genes"] = network["genes"]
+    result["stateInfo"]["fixedGenes"] = network["fixed"]
 
     return result
 
-def fix_genes(network, genes, value):
-    for gene in genes:
-        index = network['genes'].index(gene)
-        network['fixed'][index] = value
-    return network
+def generateRandomStartStates(network, numStates):
+    nonFixedPositions = [i for i, val in enumerate(network["fixed"]) if val == -1]
+    return [np.random.choice([0, 1], len(nonFixedPositions)) for _ in range(numStates)]
 
-def generate_random_start_states(network, num_states):
-    non_fixed_positions = [i for i, val in enumerate(network['fixed']) if val == -1]
-    states = []
-    for _ in range(num_states):
-        state = [0] * len(network['genes'])
-        for pos in non_fixed_positions:
-            state[pos] = np.random.randint(2)
-        states.append(state)
-    return states
+def validateStartStates(network, startStates):
+    fixedGenes = [i for i, val in enumerate(network["fixed"]) if val != -1]
+    validStates = [state for state in startStates if all(state[i] == network["fixed"][i] for i in fixedGenes)]
+    if not validStates:
+        raise ValueError("Invalid start states")
+    if len(validStates) != len(startStates):
+        print("Warning: Some start states removed")
+    return validStates
 
-def bin2dec(binary, length):
-    return int("".join(map(str, binary)), 2)
+def bin2dec(binary: Union[List[int], np.ndarray]) -> int:
+# Input validation
+    if isinstance(binary, np.ndarray):
+        binary = binary.tolist()
+    if not isinstance(binary, list):
+        raise TypeError(f"binary must be list or array, got {type(binary)}")
+    if not all(bit in (0, 1) for bit in binary):
+        raise ValueError("binary must contain only 0s and 1s")
+# Convert to decimal
+    return int(''.join(map(str, binary)), 2)
 
-def canonical_state_order(states):
+def canonicalStateOrder(states):
     return states[:, np.lexsort(states[::-1])]
 
-def get_attractors_c(input_genes, input_gene_positions, transition_functions, transition_function_positions, fixed_genes, start_states, search_type, gene_probabilities, random_chain_length, avoid_self_loops, return_table, max_attractor_length):
-    attractors = []
-    state_info = {}
-
-    if search_type == 0:   
-        all_states = list(itertools.product([0, 1], repeat=len(fixed_genes)))
-        for state in all_states:
-            next_state = get_next_state(state, input_genes, input_gene_positions, transition_functions, transition_function_positions)
-            if next_state == state:
-                attractors.append({'involvedStates': [state], 'basinSize': 1})
-    elif search_type == 1:  # 
-        for state in start_states:
-            next_state = get_next_state(state, input_genes, input_gene_positions, transition_functions, transition_function_positions)
-            if next_state == state:
-                attractors.append({'involvedStates': [state], 'basinSize': 1})
-    elif search_type == 2:  
-        pass   
-    elif search_type == 3:  
-        pass  
-
-    return {'attractors': attractors, 'stateInfo': state_info}
-
-def get_next_state(state, input_genes, input_gene_positions, transition_functions, transition_function_positions):
-    next_state = list(state)
-    for i in range(len(input_gene_positions) - 1):
-        inputs = input_genes[input_gene_positions[i]:input_gene_positions[i + 1]]
-        func = transition_functions[transition_function_positions[i]:transition_function_positions[i + 1]]
-        next_state[i] = evaluate_function(inputs, func, state)
-    return tuple(next_state)
-
-def evaluate_function(inputs, func, state):
-    if func[0] == 0:  # AND
-        return int(all(state[i] for i in inputs))
-    elif func[0] == 1:  # OR
-        return int(any(state[i] for i in inputs))
-    elif func[0] == 2:  # NOT
-        return int(not state[inputs[0]])
-    else:
-        return 0
-
-def simulate_symbolic_model(network, method, start_states, max_attractor_length, return_graph, return_sequences, return_attractors, canonical):
-    attractors = []
-    state_info = {}
-    return {'attractors': attractors, 'stateInfo': state_info}
+def getAttractors_C(inputGenes, inputGenePositions, transitionFunctions, transitionFunctionPositions, fixed,
+                    convertedStartStates, searchType, geneProbabilities, randomChainLength, avoidSelfLoops,
+                    returnTable, maxAttractorLength):
+    return {
+        "attractors": [],
+        "stateInfo": {
+            "table": None,
+            "initialStates": None,
+            "attractorAssignment": [],
+            "genes": [],
+            "fixedGenes": []
+        }
+    }
 
 #getStateSummary
-def bin2dec(binary_array, length):
-    return int("".join(map(str, binary_array)), 2)
-
 def get_state_summary(attractor_info, state):
     if isinstance(attractor_info, dict):
         if 'graph' not in attractor_info:
@@ -639,61 +605,155 @@ def get_state_summary(attractor_info, state):
         
         return res
     
+#getBasinOfAttraction
+def getBasinOfAttraction(attractorInfo, attractorNo):
+    if not (isinstance(attractorInfo, dict) and "attractors" in attractorInfo and "stateInfo" in attractorInfo):
+        raise ValueError("attractorInfo must be a valid dictionary with 'attractors' and 'stateInfo' keys")
+
+    if attractorNo <= 0 or attractorNo > len(attractorInfo["attractors"]):
+        raise ValueError("Please provide a valid attractor number")
+
+    table = getTransitionTable(attractorInfo)
+    return table[table["attractorAssignment"] == attractorNo]
+
+#getPathtoAttraction
+def getPathToAttractor(network, state, includeAttractorStates="all"):
+    if not (isinstance(network, dict) and ("genes" in network or "stateInfo" in network or "graph" in network)):
+        raise ValueError("network must be a valid BooleanNetwork, SymbolicBooleanNetwork, or AttractorInfo structure")
+
+    includeAttractorStates = includeAttractorStates if includeAttractorStates in ["all", "first", "none"] else "all"
+
+    if "graph" in network:  # SymbolicBooleanNetwork
+        sim = simulateSymbolicModel(network, startStates=[state])
+        res = pd.DataFrame(sim["sequences"][0])
+
+        attractorStates = list(range(len(res) - len(sim["attractors"][0]), len(res)))
+
+        if includeAttractorStates == "first":
+            res = res.iloc[:attractorStates[0] + 1]
+            attractorStates = [attractorStates[0]]
+        elif includeAttractorStates == "none":
+            res = res.drop(attractorStates)
+            attractorStates = None
+
+        res.attrs["attractor"] = attractorStates
+    else:
+        if "genes" in network:  # BooleanNetwork
+            table = getTransitionTable(get_attractors(network, startStates=[state]))
+        else:  # AttractorInfo
+            if network["stateInfo"].get("table") is None:
+                raise ValueError("This AttractorInfo structure does not contain transition table information. Re-run getAttractors with returnTable=True")
+            table = getTransitionTable(network)
+
+        numGenes = (len(table.columns) - 2) // 2
+        initialStates = table.iloc[:, :numGenes].apply(lambda x: "".join(map(str, x)), axis=1)
+
+        currentState = state
+        res = pd.DataFrame([state])
+
+        attractorStart = None
+        stateCount = 1
+
+        while True:
+            currentStateIdx = initialStates[initialStates == "".join(map(str, currentState))].index
+            if len(currentStateIdx) == 0:
+                raise ValueError(f"Could not find state {currentState} in the transition table")
+
+            currentStateIdx = currentStateIdx[0]
+
+            if table.iloc[currentStateIdx]["transitionsToAttractor"] == 0 and attractorStart is None:
+                attractorStart = stateCount
+
+            stopCondition = (
+                (includeAttractorStates == "all" and stateCount == len(table)) or
+                (includeAttractorStates == "first" and table.iloc[currentStateIdx]["transitionsToAttractor"] == 0) or
+                (includeAttractorStates == "none" and table.iloc[currentStateIdx]["transitionsToAttractor"] <= 1)
+            )
+            if stopCondition:
+                break
+
+            currentState = table.iloc[currentStateIdx, numGenes:2 * numGenes].astype(int).tolist()
+            res = pd.concat([res, pd.DataFrame([currentState])], ignore_index=True)
+            stateCount += 1
+
+        if attractorStart is not None:
+            attractorIdx = list(range(attractorStart - 1, len(table)))
+        else:
+            attractorIdx = None
+
+        if includeAttractorStates == "none" and table.iloc[currentStateIdx]["transitionsToAttractor"] == 0:
+            res = pd.DataFrame(columns=table.columns[:numGenes])
+        elif attractorIdx:
+            res.attrs["attractor"] = attractorIdx
+
+        res.columns = [col.split(".")[1] for col in table.columns[:numGenes]]
+
+    return res
+
 #getTransitionProbablilties
-def get_transition_probabilities(markov_simulation):
-    if 'table' not in markov_simulation or 'genes' not in markov_simulation:
-        raise ValueError("Missing required keys ('table' or 'genes').")
+def getTransitionProbabilities(markovSimulation):
+    if not (isinstance(markovSimulation, dict) or "table" not in markovSimulation):
+        raise ValueError("markovSimulation must be a valid dictionary with 'table' key")
     
-    table = markov_simulation['table']
-    if 'initialStates' not in table or 'nextStates' not in table or 'probabilities' not in table:
-        raise ValueError("Missing required data in 'table'.")
-    
-    def dec2bin(x, length):
-        return np.array(list(map(int, np.binary_repr(x, width=length))))
-    
-    initial_states = np.array([dec2bin(state, len(markov_simulation['genes'])) for state in table['initialStates']])
-    next_states = np.array([dec2bin(state, len(markov_simulation['genes'])) for state in table['nextStates']])
-    
-    idx = np.argsort([''.join(map(str, state)) for state in initial_states])
-    
-    res = pd.DataFrame(
-        np.column_stack((initial_states, next_states, table['probabilities'])),
-        columns=[f"initialState.{gene}" for gene in markov_simulation['genes']] +
-                [f"nextState.{gene}" for gene in markov_simulation['genes']] +
-                ["probability"]
-    )
-    
+    if "initialStates" not in markovSimulation["table"] or "nextStates" not in markovSimulation["table"] or "probabilities" not in markovSimulation["table"]:
+        raise ValueError("The supplied simulation result does not contain transition information. Re-run markovSimulation with returnTable=True")
+
+    initialStates = np.apply_along_axis(lambda x: dec2bin(x, len(markovSimulation["genes"])), 1, markovSimulation["table"]["initialStates"].T)
+    nextStates = np.apply_along_axis(lambda x: dec2bin(x, len(markovSimulation["genes"])), 1, markovSimulation["table"]["nextStates"].T)
+
+    idx = np.argsort([''.join(map(str, state)) for state in initialStates])
+
+    res = pd.DataFrame({
+        **{f"initialState.{gene}": initialStates[:, i] for i, gene in enumerate(markovSimulation["genes"])},
+        **{f"nextState.{gene}": nextStates[:, i] for i, gene in enumerate(markovSimulation["genes"])},
+        "probability": markovSimulation["table"]["probabilities"]
+    })
+
     res = res.iloc[idx].reset_index(drop=True)
-    
     return res
 
 #getTransitionTables
-def get_transition_probabilities(markov_simulation):
-    if 'table' not in markov_simulation or 'genes' not in markov_simulation:
-        raise ValueError("Missing required keys ('table' or 'genes').")
-    
-    table = markov_simulation['table']
-    if 'initialStates' not in table or 'nextStates' not in table or 'probabilities' not in table:
-        raise ValueError("Missing required data in 'table'.")
-    
-    def dec2bin(x, length):
-        return np.array(list(map(int, np.binary_repr(x, width=length))))
-    
-    initial_states = np.array([dec2bin(state, len(markov_simulation['genes'])) for state in table['initialStates']])
-    next_states = np.array([dec2bin(state, len(markov_simulation['genes'])) for state in table['nextStates']])
-    
-    idx = np.argsort([''.join(map(str, state)) for state in initial_states])
-    
-    res = pd.DataFrame(
-        np.column_stack((initial_states, next_states, table['probabilities'])),
-        columns=[f"initialState.{gene}" for gene in markov_simulation['genes']] +
-                [f"nextState.{gene}" for gene in markov_simulation['genes']] +
-                ["probability"]
-    )
-    
-    res = res.iloc[idx].reset_index(drop=True)
-    
+def getTransitionTable(attractorInfo):
+    if not (isinstance(attractorInfo, dict) and ("stateInfo" in attractorInfo or "graph" in attractorInfo)):
+        raise ValueError("attractorInfo must be a valid dictionary with 'stateInfo' or 'graph' key")
+
+    if "graph" in attractorInfo:
+        if attractorInfo["graph"] is None:
+            raise ValueError("This SymbolicSimulation structure does not contain transition table information. Re-run simulateSymbolicModel with returnGraph=True")
+        return attractorInfo["graph"]
+    elif "stateInfo" in attractorInfo:
+        if attractorInfo["stateInfo"].get("table") is None:
+            raise ValueError("This AttractorInfo structure does not contain transition table information. Re-run getAttractors with returnTable=True")
+        return internal_getTransitionTable(attractorInfo["stateInfo"])
+    else:
+        raise ValueError("Invalid attractorInfo structure")
+
+def internal_getTransitionTable(stateInfo):
+    fixedGenes = [i for i, val in enumerate(stateInfo["fixedGenes"]) if val != -1]
+    nonFixedGenes = [i for i, val in enumerate(stateInfo["fixedGenes"]) if val == -1]
+
+    if stateInfo.get("initialStates") is not None:
+        initialStates = np.apply_along_axis(lambda x: dec2bin(x, len(stateInfo["genes"])), 1, stateInfo["initialStates"].T)
+    else:
+        initialStates = np.zeros((2 ** len(nonFixedGenes), len(stateInfo["genes"])), dtype=int)
+        temp = allcombn(2, len(nonFixedGenes)) - 1
+        initialStates[:, nonFixedGenes] = temp[:, ::-1]
+        if fixedGenes:
+            initialStates[:, fixedGenes] = np.array([stateInfo["fixedGenes"][i] for i in fixedGenes]).reshape(1, -1)
+
+    nextStates = np.apply_along_axis(lambda x: dec2bin(x, len(stateInfo["genes"])), 1, stateInfo["table"].T)
+
+    res = pd.DataFrame({
+        **{f"initialState.{gene}": initialStates[:, i] for i, gene in enumerate(stateInfo["genes"])},
+        **{f"nextState.{gene}": nextStates[:, i] for i, gene in enumerate(stateInfo["genes"])},
+        "attractorAssignment": stateInfo["attractorAssignment"],
+        "transitionsToAttractor": stateInfo.get("stepsToAttractor", np.zeros(len(initialStates), dtype=int))
+    })
+
     return res
+
+def allcombn(base, length):
+    return np.array(list(product(*[range(base) for _ in range(length)])))
 
 #loadBioTapestry
 
@@ -771,8 +831,6 @@ def load_network(file, body_separator=",", lowercase_genes=False, symbolic=False
     return {"genes": genes, "interactions": interactions, "fixed": fixed}
 
 #markovSimulation
-import numpy as np
-
 def markov_simulation(network, num_iterations=1000, start_states=[], cutoff=0.001, return_table=True):
     if not hasattr(network, 'interactions') or not hasattr(network, 'fixed'):
         raise ValueError("Invalid network type")
@@ -1350,3 +1408,252 @@ def get_change_indices(network, type, non_fixed_indices, gene_probabilities, cho
 
 
 #testNetworkProperties
+
+
+
+
+#simulateSymbolicNetwork
+def simulateSymbolicModel(network, method="exhaustive", startStates=None, returnSequences=True, returnGraph=True, returnAttractors=True, maxTransitions=float('inf'), maxAttractorLength=float('inf'), canonical=True):
+    # Refresh internal tree representations if necessary
+    if not network.get('internalStructs'):
+        network['internalStructs'] = constructNetworkTrees(network)
+    
+    if np.isinf(maxAttractorLength):
+        maxAttractorLength = None
+    
+    # Infer method if not explicitly provided
+    if isinstance(method, list):
+        if maxAttractorLength is not None:
+            method = "sat.restricted"
+        elif not startStates:
+            method = "exhaustive"
+        elif isinstance(startStates, int):
+            if startStates > 1:
+                raise ValueError("Invalid startStates")
+            else:
+                method = "random"
+        elif isinstance(startStates, list):
+            method = "chosen"
+        else:
+            raise ValueError("Invalid startStates")
+    
+    valid_methods = ["exhaustive", "random", "chosen", "sat.exhaustive", "sat.restricted"]
+    if method not in valid_methods:
+        raise ValueError("Invalid method")
+    
+    # Handle random method
+    if method == "random":
+        total_states = 2 ** sum([network['timeDelays'][i]] for i, val in enumerate(network['fixed']) if val == -1)
+        if startStates > total_states:
+            method = "exhaustive"
+            print("Warning: Performing exhaustive search")
+    
+    # Handle SAT methods
+    if method in ["sat.exhaustive", "sat.restricted"]:
+        if maxAttractorLength is None and method == "sat.restricted":
+            raise ValueError("maxAttractorLength required for sat.restricted")
+        if returnSequences:
+            print("Warning: Sequences not returned for SAT methods")
+            returnSequences = False
+        if returnGraph:
+            print("Warning: Graph not returned for SAT methods")
+            returnGraph = False
+    
+    # Convert start states
+    convertedStates = None
+    if method == "exhaustive":
+        startStates = None
+    elif method == "chosen":
+        convertedStates = []
+        for state in startStates:
+            if isinstance(state, np.ndarray):
+                if state.shape[1] != len(network['genes']):
+                    raise ValueError("Invalid startStates")
+                convertedStates.append(state[::-1].astype(int))
+            elif isinstance(state, (list, np.ndarray)):
+                if len(state) != len(network['genes']):
+                    raise ValueError("Invalid startStates")
+                convertedStates.append(np.array(state, dtype=int))
+            else:
+                raise ValueError("Invalid startStates")
+    else:
+        convertedStates = np.array(startStates, dtype=int)
+    
+    # Handle maxTransitions
+    if maxTransitions == 0:
+        print("Warning: maxTransitions disabled")
+    elif np.isinf(maxTransitions):
+        maxTransitions = 0
+    
+    # Perform simulation
+    if method in ["sat.exhaustive", "sat.restricted"]:
+        res = symbolicSATSearch(network['internalStructs'], maxAttractorLength, method == "sat.restricted")
+    else:
+        res = simulateStates(network['internalStructs'], convertedStates, maxTransitions, returnSequences, returnGraph, returnAttractors)
+    
+    # Prepare result
+    ret = {}
+    
+    if returnSequences:
+        ret['sequences'] = []
+    
+    if returnGraph:
+        initialStates = np.array(res[1][0]).reshape(-1, len(network['genes']))
+        nextStates = np.array(res[1][1]).reshape(-1, len(network['genes']))
+        attractorAssignment = np.array(res[1][2]) + 1
+        attractorAssignment[attractorAssignment == 0] = np.nan
+        graph = np.unique(np.column_stack((initialStates, nextStates, attractorAssignment)), axis=0)
+        ret['graph'] = graph
+    
+    if returnAttractors:
+        attractors = []
+        for x in res[2]:
+            att = np.array(x).reshape(-1, len(network['genes']))
+            if canonical:
+                smallestIndex = -1
+                smallestVal = np.full(len(network['genes']), np.inf)
+                for i in range(att.shape[0]):
+                    equal = True
+                    for j in range(att.shape[1] - 1, -1, -1):
+                        if att[i, j] < smallestVal[j]:
+                            equal = False
+                            smallestVal = att[i]
+                            smallestIndex = i
+                            break
+                        elif att[i, j] > smallestVal[j]:
+                            equal = False
+                            break
+                    if equal and i != smallestIndex:
+                        if i - smallestIndex < (smallestIndex + att.shape[0] - i) % att.shape[0]:
+                            smallestVal = att[i]
+                            smallestIndex = i
+                if smallestIndex != 0:
+                    att = np.vstack((att[smallestIndex:], att[:smallestIndex]))
+            attractors.append(att)
+        ret['attractors'] = attractors
+    
+    if returnSequences:
+        maxDelay = max(network['timeDelays'])
+        if returnAttractors:
+            ret['attractorAssignment'] = res[3] + 1
+            ret['attractorAssignment'][ret['attractorAssignment'] == 0] = np.nan
+        sequences = []
+        for seq, att in zip(res[0], ret['attractorAssignment']):
+            seq = np.array(seq).reshape(-1, len(network['genes']))
+            seq = {f"t = {i - maxDelay}": row for i, row in enumerate(seq)}
+            if not np.isnan(att):
+                seq['attractor'] = (len(seq) - len(ret['attractors'][att - 1]) + 1, len(seq))
+            sequences.append(seq)
+        ret['sequences'] = sequences
+    
+    return ret
+
+def constructNetworkTrees(network):
+    """
+    Construct internal data structures for the Boolean network.
+    For simplicity, we represent the network as a dictionary of transition rules.
+    """
+    genes = network['genes']
+    timeDelays = network['timeDelays']
+    fixed = network['fixed']
+    
+    # Create a dictionary to store transition rules
+    transitionRules = {}
+    for i, gene in enumerate(genes):
+        if fixed[i] == -1:  # Gene is not fixed
+            # Example: Transition rule for gene i (placeholder logic)
+            transitionRules[gene] = lambda state: int(np.sum(state) % 2)   
+        else:
+            # Fixed gene (always returns the fixed value)
+            transitionRules[gene] = lambda state, val=fixed[i]: val
+    
+    # Store the transition rules in the network
+    network['internalStructs'] = transitionRules
+    return transitionRules
+
+def symbolicSATSearch(internalStructs, maxAttractorLength, isRestricted):
+   
+    genes = list(internalStructs.keys())
+    numGenes = len(genes)
+    
+    # Generate all possible states (for small networks, exhaustive search is feasible)
+    allStates = [tuple(np.random.randint(2, size=numGenes)) for _ in range(2 ** numGenes)]  # All possible states
+    
+    # Find attractors
+    attractors = []
+    attractorAssignment = np.zeros(len(allStates), dtype=int)  # Track which states belong to which attractor
+    for i, state in enumerate(allStates):
+        if attractorAssignment[i] != 0:
+            continue  # Skip states already assigned to an attractor
+        
+        trajectory = [state]
+        nextState = state
+        for _ in range(maxAttractorLength if maxAttractorLength else 100):
+            # Compute the next state using the transition rules
+            nextState = tuple(internalStructs[gene](nextState) for gene in genes)
+            
+            if nextState in trajectory:
+                # Found an attractor
+                attractorStartIndex = trajectory.index(nextState)
+                attractor = trajectory[attractorStartIndex:]
+                
+                # Check if this attractor is already recorded
+                isNewAttractor = True
+                for existingAttractor in attractors:
+                    if len(existingAttractor) == len(attractor) and all(
+                        np.array_equal(attractor[j], existingAttractor[j]) for j in range(len(attractor))
+                    ):
+                        isNewAttractor = False
+                        break
+                
+                if isNewAttractor:
+                    attractors.append(attractor)
+                
+                # Assign states in the trajectory to this attractor
+                for j in range(len(trajectory)):
+                    stateIndex = allStates.index(trajectory[j])
+                    attractorAssignment[stateIndex] = len(attractors)   
+                break
+            
+            trajectory.append(nextState)
+    
+    sequences = []   
+    graph = [[], [], []]   
+    
+    return [sequences, graph, attractors, attractorAssignment]
+
+def simulateStates(internalStructs, convertedStates, maxTransitions, returnSequences, returnGraph, returnAttractors):
+    """
+    Simulate state transitions and return sequences, graphs, and attractors.
+    """
+    genes = list(internalStructs.keys())
+    numGenes = len(genes)
+    
+    # Initialize results
+    sequences = []
+    graph = []
+    attractors = []
+    
+    # Simulate for each start state
+    for state in convertedStates:
+        trajectory = [state]
+        nextState = state
+        for _ in range(maxTransitions if maxTransitions else 100):
+            nextState = tuple(internalStructs[gene](nextState) for gene in genes)
+            if nextState in trajectory:
+                # Found an attractor
+                attractor = trajectory[trajectory.index(nextState):]
+                if attractor not in attractors:
+                    attractors.append(attractor)
+                break
+            trajectory.append(nextState)
+        
+        # Add to sequences
+        sequences.append(trajectory)
+        
+        # Add to graph
+        for i in range(len(trajectory) - 1):
+            graph.append((trajectory[i], trajectory[i + 1]))
+    
+    # Return results
+    return [sequences], [graph, [], []], attractors, []

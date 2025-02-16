@@ -1,67 +1,92 @@
 import numpy as np
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor
-import matplotlib.pyplot as plt
-import networkx as nx
 import boolnet
+import matplotlib.pyplot as plt
+
+
 
 ################ convert to attractor matrix and scores function
 def calc_attr_score(attractors, output_list):
     attr_num = len(attractors['attractors'])
-    attr_mat = np.zeros(len(output_list), attr_num)
+    attr_mat = np.zeros((len(output_list), attr_num))
     attr_ratio = np.zeros(attr_num)
 
     for attr_indx in range(attr_num):
-        attr_seq = np.array(attractors['attractors'][attr_indx]['sequence'])
+        attractor = attractors['attractors'][attr_indx]
+        
+        if 'involvedStates' in attractor:
+            states = np.array(attractor['involvedStates'])
+            if states.ndim == 1:
+                states = states.reshape(1, -1)
+        else:
+            states = np.array(attractor.get('sequence', []))
+   
         
         for i, node in enumerate(output_list):
-            node_idx = attractors['node_names'].index(node)
-            attr_mat[i, attr_indx] = np.mean(attr_seq[:, node_idx])
+            try: 
+            
+                if 'genes' in attractors['stateInfo']:
+                        node_idx = attractors['stateInfo']['genes'].index(node)
+                else:
+                    node_idx = output_list.index(node)
+                
+                attr_mat[i, attr_indx] = np.mean(states[:, node_idx])
+            
+            except (ValueError, IndexError) as e:
+                print(f"Warning: Could not find index for node {node}")
+                attr_mat[i, attr_indx] = 0
        
-        total_states = len(attractors['stateInfo']['table'])
-        basin_size = attractors['attractors'][attr_indx]['basinSize']
+        total_states = len(attractors['stateInfo'].get('table', [1]))
+        basin_size = attractor.get('basinSize', 1)
+        
+        if basin_size is None:
+            basin_size = 1
+        
         attr_ratio[attr_indx] = (100 * basin_size / total_states)
-
-        attr_ratio = attr_ratio / np.sum(attr_ratio)
-        attr_ratio_mat = np.tile(attr_ratio, (len(output_list), 1))
-        node_activity = np.sum(np.round(100 * attr_mat * attr_ratio_mat, 2), axis=1)
     
-        return node_activity
-
-################ single off-perturbation analysis
-
-def pert_double(cand_node, net, output_list, off_node = None, on_node = None):
-    if off_node is None and on_node is None:
-        pert_result = []
-        with ProcessPoolExecutor() as executor:
-            for idx in range(len(cand_node)):
-                attractors = boolnet.get_attractors(net, genes_off=cand_node[idx])
-                result = calc_attr_score(attractors, output_list)
-                pert_result.append(result)
-    
-    elif off_node is None and on_node is not None:
-        pert_result = []
-        with ProcessPoolExecutor() as executor:
-            for idx in range(len(cand_node)):
-                attractors = boolnet.get_attractors(net, genes_on=[on_node], genes_off=cand_node[idx])
-                result = calc_attr_score(attractors, output_list)
-                pert_result.append(result)
-    
-    elif off_node is not None and on_node is None:
-        pert_result = []
-        with ProcessPoolExecutor() as executor:
-            for idx in range(len(cand_node)):
-                attractors = boolnet.get_attractors(net, genes_off=[off_node] + cand_node[idx])
-                result = calc_attr_score(attractors, output_list)
-                pert_result.append(result)
-    
+    total_ratio = np.sum(attr_ratio)
+    if total_ratio > 0:
+        attr_ratio = attr_ratio / total_ratio
     else:
-        pert_result = []
-        with ProcessPoolExecutor() as executor:
-            for idx in range(len(cand_node)):
-                attractors = boolnet.get_attractors(net, genes_on=[on_node], genes_off=[off_node] + cand_node[idx])
-                result = calc_attr_score(attractors, output_list)
-                pert_result.append(result)
+        attr_ratio = np.ones_like(attr_ratio) / len(attr_ratio)
+        
+    attr_ratio_mat = np.tile(attr_ratio, (len(output_list), 1))
+    node_activity = np.sum(np.round(100 * attr_mat * attr_ratio_mat, 2), axis=1)
+
+    return node_activity
+
+################ perturbation analysis
+
+def process_perturbation(node, net, off_node, on_node):
+    
+    try:
+        genes_off = [node] if off_node is None else [off_node, node]
+        genes_on = [on_node] if on_node is not None else None
+        
+        attractors = net.get_attractors(
+            type="synchronous",
+            method="random",
+            start_states=1000000,
+            genes_off=genes_off,
+            genes_on=genes_off,
+        )
+    
+    except Exception as e:
+        print(f"Error processing node {node}: {str(e)}")
+        return None
+
+
+def pert_single(cand_node, net, output_list, off_node=None, on_node=None):
+    pert_result = []
+
+    with ProcessPoolExecutor() as executor:
+        results = executor.map(lambda node: process_perturbation(node), cand_node)
+    
+    for attractors in results:
+        if attractors is not None:
+            result = calc_attr_score(attractors, output_list)
+            pert_result.append(result)
 
     pert_result = pd.DataFrame(pert_result)
     pert_result.insert(0, 'Base', np.zeros(len(pert_result)))  
@@ -70,38 +95,16 @@ def pert_double(cand_node, net, output_list, off_node = None, on_node = None):
     
     return pert_result
 
-def pert_single(cand_node, net, output_list, off_node=None, on_node=None):
-    if off_node is None and on_node is None:
-        pert_result = []
-        with ProcessPoolExecutor() as executor:
-            for idx in range(len(cand_node)):
-                attractors = boolnet.get_attractors(net, genes_off=cand_node[idx])
-                result = calc_attr_score(attractors, output_list)
-                pert_result.append(result)
-    
-    elif off_node is None and on_node is not None:
-        pert_result = []
-        with ProcessPoolExecutor() as executor:
-            for idx in range(len(cand_node)):
-                attractors = boolnet.get_attractors(net, genes_on=[on_node], genes_off=cand_node[idx])
-                result = calc_attr_score(attractors, output_list)
-                pert_result.append(result)
-    
-    elif off_node is not None and on_node is None:
-        pert_result = []
-        with ProcessPoolExecutor() as executor:
-            for idx in range(len(cand_node)):
-                attractors = boolnet.get_attractors(net, genes_off=[off_node] + cand_node[idx])
-                result = calc_attr_score(attractors, output_list)
-                pert_result.append(result)
-    
-    else:
-        pert_result = []
-        with ProcessPoolExecutor() as executor:
-            for idx in range(len(cand_node)):
-                attractors = boolnet.get_attractors(net, genes_on=[on_node], genes_off=[off_node] + cand_node[idx])
-                result = calc_attr_score(attractors, output_list)
-                pert_result.append(result)
+def pert_double(cand_node, net, output_list, off_node=None, on_node=None):
+    pert_result = []
+
+    with ProcessPoolExecutor() as executor:
+        results = executor.map(lambda node: process_perturbation(node), cand_node)
+
+    for attractors in results:
+        if attractors is not None:
+            result = calc_attr_score(attractors, output_list)
+            pert_result.append(result)
 
     pert_result = pd.DataFrame(pert_result)
     pert_result.insert(0, 'Base', np.zeros(len(pert_result)))  

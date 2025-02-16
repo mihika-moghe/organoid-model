@@ -1,7 +1,9 @@
-import helper
+from helper import calc_attr_score, pert_single, pert_double
 import pandas as pd
 import boolnet
 import time
+from helper import calc_attr_score, pert_single, pert_double
+
 
 # Load network
 net = boolnet.load_network("A_model.txt")
@@ -19,7 +21,13 @@ attractors_Normal = net.get_attractors(
     genes_off=["APOE4"]
 )
 print(f"Normal analysis time: {time.time() - start_time:.2f}s")
-pheno_Normal = helper.calc_attr_score(attractors_Normal, output_list)
+        
+
+if not attractors_Normal.get('attractors'):
+    raise ValueError("No attractors found in normal analysis")
+
+pheno_Normal = calc_attr_score(attractors_Normal, output_list)
+
 
 #########################
 #       APOE4 SNP       #
@@ -32,7 +40,11 @@ attractors_APOE4 = net.get_attractors(
     genes_on=["APOE4"]
 )
 print(f"APOE4 analysis time: {time.time() - start_time:.2f}s")
-pheno_APOE4 = helper.calc_attr_score(attractors_APOE4, output_list)
+
+if not attractors_APOE4.get('attractors'):
+    raise ValueError("No attractors found in APOE4 analysis")
+
+pheno_APOE4 = calc_attr_score(attractors_APOE4, output_list)
 
 #########################
 #        LPL SNP        #
@@ -44,7 +56,12 @@ attractors_LPL = net.get_attractors(
     start_states=1000000,
     genes_off=["APOE4", "LPL"]
 )
-pheno_LPL = helper.calc_attr_score(attractors_LPL, output_list)
+print(f"LPL analysis time: {time.time() - start_time:.2f}s")
+
+if not attractors_LPL.get('attractors'):
+    raise ValueError("No attractors found in LPL analysis")
+
+pheno_LPL = calc_attr_score(attractors_LPL, output_list)
 
 #########################################
 #        Make perturbation table        #
@@ -58,8 +75,8 @@ d_target = [
     ("PTEN", "mTOR")
 ]
 
-pert_APOE4_s = helper.pert_single(s_target, net, output_list, on_node=["APOE4"])
-pert_APOE4_d = helper.pert_double(d_target, net, output_list, on_node=["APOE4"])
+pert_APOE4_s = pert_single(s_target, net, output_list, on_node=["APOE4"])
+pert_APOE4_d = pert_double(d_target, net, output_list, on_node=["APOE4"])
 
 pert_APOE4_s1 = pert_APOE4_s.iloc[2:].T
 pert_APOE4_d1 = pert_APOE4_d.iloc[2:].T
@@ -88,8 +105,8 @@ d_target = [
     ("PTEN", "Dkk1")
 ]
 
-pert_LPL_s = helper.pert_single(s_target, net, output_list, off_node=["LPL", "APOE4"])
-pert_LPL_d = helper.pert_double(d_target, net, output_list, off_node=["LPL", "APOE4"])
+pert_LPL_s = pert_single(s_target, net, output_list, off_node=["LPL", "APOE4"])
+pert_LPL_d = pert_double(d_target, net, output_list, off_node=["LPL", "APOE4"])
 
 pert_LPL_s1 = pert_LPL_s.iloc[2:].T
 pert_LPL_d1 = pert_LPL_d.iloc[2:, :-1].T
