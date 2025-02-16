@@ -7,7 +7,7 @@ from helper import calc_attr_score, pert_single, pert_double
 
 # Load network
 net = boolnet.load_network("A_model.txt")
-output_list = net.genes
+output_list = net('genes')
 
 #########################
 #        Normal         #
