@@ -319,23 +319,23 @@ def generateTimeSeries(network, numSeries, numMeasurements,
                 fixedValues = perturbationMatrix[fixedIdx, i]
             res = np.random.randint(2, size=(len(network['genes']), numMeasurements))
         else:
-            startState = np.random.randint(2, size=len(network['genes']))
+            start_states = np.random.randint(2, size=len(network['genes']))
             
             if perturbations > 0:
                 fixedIdx = np.where(~np.isnan(perturbationMatrix[:, i]))[0]
                 fixedValues = perturbationMatrix[fixedIdx, i]
-                startState[fixedIdx] = fixedValues
+                start_states[fixedIdx] = fixedValues
             
             res = np.zeros((len(network['genes']), numMeasurements))
-            res[:, 0] = startState
+            res[:, 0] = start_states
             for j in range(1, numMeasurements):
                 if type == "synchronous":
-                    startState = synchronousTransition(network, startState)
+                    start_states = synchronousTransition(network, start_states)
                 elif type == "asynchronous":
-                    startState = asynchronousTransition(network, startState, geneProbabilities)
+                    start_states = asynchronousTransition(network, start_states, geneProbabilities)
                 elif type == "probabilistic":
-                    startState = probabilisticTransition(network, startState, geneProbabilities)
-                res[:, j] = startState
+                    start_states = probabilisticTransition(network, start_states, geneProbabilities)
+                res[:, j] = start_states
         
         if noiseLevel != 0:
             res = res + np.random.normal(0, noiseLevel, res.shape)
@@ -412,18 +412,18 @@ def dec2bin(decimal: int, num_bits: int, output_type: str = 'array') -> Union[Li
 
 #getAttractors
 
-def get_attractors(network, type="synchronous", method="exhaustive", startStates=[], genesON=[], genesOFF=[],
+def get_attractors(network, type="synchronous", method="exhaustive", start_states=[], genes_on=[], genes_off=[],
                   canonical=True, randomChainLength=10000, avoidSelfLoops=True, geneProbabilities=None,
                   maxAttractorLength=None, returnTable=True):
     if not isinstance(network, dict) or "genes" not in network or "interactions" not in network or "fixed" not in network:
         raise ValueError("Invalid network structure")
 
-    if genesON:
-        for gene in genesON:
+    if genes_on:
+        for gene in genes_on:
             if gene in network["genes"]:
                 network["fixed"][network["genes"].index(gene)] = 1
-    if genesOFF:
-        for gene in genesOFF:
+    if genes_off:
+        for gene in genes_off:
             if gene in network["genes"]:
                 network["fixed"][network["genes"].index(gene)] = 0
 
@@ -441,12 +441,12 @@ def get_attractors(network, type="synchronous", method="exhaustive", startStates
         maxAttractorLength = float('inf')
 
     if isinstance(method, list):
-        if type == "asynchronous" and not startStates:
-            startStates = max(round(2 ** len(nonFixedPositions) / 20), 5)
+        if type == "asynchronous" and not start_states:
+            start_states = max(round(2 ** len(nonFixedPositions) / 20), 5)
             method = "random"
-        elif isinstance(startStates, (int, float)):
+        elif isinstance(start_states, (int, float)):
             method = "random"
-        elif isinstance(startStates, list) and startStates:
+        elif isinstance(start_states, list) and start_states:
             method = "chosen"
         elif maxAttractorLength is not None:
             method = "sat.restricted"
@@ -463,17 +463,27 @@ def get_attractors(network, type="synchronous", method="exhaustive", startStates
         raise ValueError("SAT-based search requires synchronous updates")
 
     if method == "exhaustive":
-        startStates = []
+        start_states = []
     elif method == "random":
-        if not isinstance(startStates, (int, float)):
-            raise ValueError("startStates must be a number for random method")
-        startStates = generateRandomStartStates(network, startStates)
+        if not isinstance(start_states, (int, float)):
+            raise ValueError("start_states must be a number for random method")
+        start_states = generateRandomStartStates(network, start_states)
     elif method == "chosen":
-        if not isinstance(startStates, list) or not startStates:
-            raise ValueError("startStates must be a list for chosen method")
-        startStates = validateStartStates(network, startStates)
+        if not isinstance(start_states, list) or not start_states:
+            raise ValueError("start_states must be a list for chosen method")
+        start_states = validateStartStates(network, start_states)
 
-    convertedStartStates = [bin2dec(state, len(network["genes"])) for state in startStates] if startStates else None
+    if start_states:
+        try:
+            # Ensure start_states is a list of binary lists
+            if isinstance(start_states, list) and all(isinstance(state, list) and all(x in [0, 1] for x in state) for state in start_states):
+                convertedStartStates = [bin2dec({"binary": state}) for state in start_states]  
+            else:
+                raise ValueError(f"Start states must be a list of binary lists. Found: {start_states}")
+        except ValueError as e:
+            raise ValueError(f"Error converting start states: {str(e)}")
+    else:
+        convertedStartStates = None
 
     inputGenes = [gene for interaction in network["interactions"] for gene in interaction["input"]]
     inputGenePositions = np.cumsum([0] + [len(interaction["input"]) for interaction in network["interactions"]])
@@ -528,19 +538,67 @@ def get_attractors(network, type="synchronous", method="exhaustive", startStates
     return result
 
 def generateRandomStartStates(network, numStates):
-    nonFixedPositions = [i for i, val in enumerate(network["fixed"]) if val == -1]
-    return [np.random.choice([0, 1], len(nonFixedPositions)) for _ in range(numStates)]
+    numGenes = len(network["genes"])
+    
+    # Convert fixed to a list regardless of what it is
+    try:
+        # Handle case where fixed might be a dictionary or other object
+        if isinstance(network["fixed"], dict):
+            fixed_list = [-1] * numGenes  # Default all to unfixed
+        else:
+            # Try to convert to list (works for lists, arrays, tuples, etc.)
+            fixed_list = list(network["fixed"])
+    except:
+        # If conversion fails, just create an all unfixed list
+        fixed_list = [-1] * numGenes
+    
+    # Make sure fixed_list is the right length
+    if len(fixed_list) > numGenes:
+        fixed_list = fixed_list[:numGenes]
+    elif len(fixed_list) < numGenes:
+        fixed_list.extend([-1] * (numGenes - len(fixed_list)))
+    
+    # Normalize values
+    for i in range(numGenes):
+        if not isinstance(fixed_list[i], (int, float)) or fixed_list[i] not in [-1, 0, 1]:
+            fixed_list[i] = -1  # Set invalid values to unfixed
+    
+    # Find positions that need random values
+    nonFixedPositions = [i for i, val in enumerate(fixed_list) if val == -1]
+    
+    # Generate states
+    states = []
+    for _ in range(numStates):
+        state = np.zeros(numGenes, dtype=int)
+        
+        # Set fixed values
+        for i, val in enumerate(fixed_list):
+            if val != -1:
+                state[i] = int(val)
+        
+        # Set random values
+        for pos in nonFixedPositions:
+            state[pos] = np.random.choice([0, 1])
+        
+        states.append(state.tolist())
+    
+    return states
 
-def validateStartStates(network, startStates):
+
+
+
+
+
+def validateStartStates(network, start_states):
     fixedGenes = [i for i, val in enumerate(network["fixed"]) if val != -1]
-    validStates = [state for state in startStates if all(state[i] == network["fixed"][i] for i in fixedGenes)]
+    validStates = [state for state in start_states if all(state[i] == network["fixed"][i] for i in fixedGenes)]
     if not validStates:
         raise ValueError("Invalid start states")
-    if len(validStates) != len(startStates):
+    if len(validStates) != len(start_states):
         print("Warning: Some start states removed")
     return validStates
 
-def bin2dec(binary: Union[List[int], np.ndarray]) -> int:
+"""def bin2dec(binary: Union[List[int], np.ndarray], length: Optional[int]=None) -> int:
 # Input validation
     if isinstance(binary, np.ndarray):
         binary = binary.tolist()
@@ -550,6 +608,62 @@ def bin2dec(binary: Union[List[int], np.ndarray]) -> int:
         raise ValueError("binary must contain only 0s and 1s")
 # Convert to decimal
     return int(''.join(map(str, binary)), 2)
+
+    print(f"Binary input: {binary}")
+    
+    # Validate each bit
+    for i, bit in enumerate(binary):
+        if bit not in (0, 1):
+            raise ValueError(f"Invalid bit at position {i}: {bit}. All bits must be 0 or 1")
+    
+    try:
+        binary_str = ''.join(map(str, binary))
+        print(f"Binary string: {binary_str}")
+        return int(binary_str, 2)
+    except ValueError as e:
+        raise ValueError(f"Failed to convert binary {binary} to integer: {str(e)}")"""
+
+def bin2dec(binary: Union[List[int], np.ndarray, dict], length: Optional[int] = None) -> int:
+    print(f"bin2dec input: {binary}, type: {type(binary)}")
+    
+    # Handle dictionary input
+    if isinstance(binary, dict):
+        if 'binary' in binary:
+            binary = binary['binary']
+            print(f"Extracted binary data from dictionary: {binary}")
+        else:
+            raise ValueError("Dictionary input must contain a 'binary' key.")
+    
+    # Handle NumPy array input
+    if isinstance(binary, np.ndarray):
+        binary = binary.tolist()
+        print(f"After numpy conversion: {binary}")
+    
+    # Validate input type
+    if not isinstance(binary, list):
+        raise TypeError(f"binary must be list, array, or dict with 'binary' key, got {type(binary)}")
+    
+    # Validate non-empty input
+    if not binary:
+        raise ValueError("Empty binary input")
+        
+    # Validate binary content
+    print("Elements and their types:")
+    for i, bit in enumerate(binary):
+        print(f"Position {i}: value = {bit}, type = {type(bit)}")
+        if bit not in (0, 1):
+            raise ValueError(f"Invalid bit at position {i}: {bit}")
+    
+    # Convert binary list to decimal
+    try:
+        binary_str = ''.join(map(str, binary))
+        print(f"Final binary string: {binary_str}")
+        result = int(binary_str, 2)
+        print(f"Converted result: {result}")
+        return result
+    except ValueError as e:
+        raise ValueError(f"Failed to convert binary {binary} to integer. Detailed error: {str(e)}")
+
 
 def canonicalStateOrder(states):
     return states[:, np.lexsort(states[::-1])]
@@ -624,7 +738,7 @@ def getPathToAttractor(network, state, includeAttractorStates="all"):
     includeAttractorStates = includeAttractorStates if includeAttractorStates in ["all", "first", "none"] else "all"
 
     if "graph" in network:  # SymbolicBooleanNetwork
-        sim = simulateSymbolicModel(network, startStates=[state])
+        sim = simulateSymbolicModel(network, start_states=[state])
         res = pd.DataFrame(sim["sequences"][0])
 
         attractorStates = list(range(len(res) - len(sim["attractors"][0]), len(res)))
@@ -639,7 +753,7 @@ def getPathToAttractor(network, state, includeAttractorStates="all"):
         res.attrs["attractor"] = attractorStates
     else:
         if "genes" in network:  # BooleanNetwork
-            table = getTransitionTable(get_attractors(network, startStates=[state]))
+            table = getTransitionTable(get_attractors(network, start_states=[state]))
         else:  # AttractorInfo
             if network["stateInfo"].get("table") is None:
                 raise ValueError("This AttractorInfo structure does not contain transition table information. Re-run getAttractors with returnTable=True")
@@ -764,71 +878,104 @@ def allcombn(base, length):
 
 
 #loadNetwork
-def load_network(file, body_separator=",", lowercase_genes=False, symbolic=False):
-    with open(file, 'r') as f:
-        lines = f.readlines()
-    
+def load_network(file: str, body_separator: str = ",", lowercase_genes: bool = False, symbolic: bool = False) -> dict:
+ 
+    try:
+        with open(file, 'r') as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Network file not found: {file}")
+    except Exception as e:
+        raise ValueError(f"Error reading network file: {str(e)}")
+
+
     lines = [line.split('#')[0].strip() for line in lines if line.strip() and not line.startswith('#')]
-    
+   
     if not lines:
-        raise ValueError("Header expected!")
-    
-    header = lines[0].lower().split(body_separator)
-    if len(header) < 2 or header[0] != "targets" or header[1] not in ["functions", "factors"]:
-        raise ValueError(f"Invalid header: {lines[0]}")
-    
+        raise ValueError("Empty network file or no valid content found")
+
+    header = [h.strip().lower() for h in lines[0].split(body_separator)]
+   
+    if len(header) < 2:
+        raise ValueError(f"Header must have at least 2 columns. Found: {header}")
+    if header[0] != "targets":
+        raise ValueError(f"First header must be 'targets'. Found: '{header[0]}'")
+    if header[1] not in ["functions", "factors"]:
+        raise ValueError(f"Second header must be 'functions' or 'factors'. Found: '{header[1]}'")
+
     lines = lines[1:]
     if lowercase_genes:
         lines = [line.lower() for line in lines]
-    
+
     processed_lines = []
-    for line in lines:
-        bracket_count = 0
-        last_idx = 0
-        result = []
-        
-        for i, char in enumerate(line):
-            if char == "(":
-                bracket_count += 1
-            elif char == ")":
-                bracket_count -= 1
-            elif char == body_separator and bracket_count == 0:
-                result.append(line[last_idx:i].strip())
-                last_idx = i + 1
-        result.append(line[last_idx:].strip())
-        processed_lines.append(result)
-    
-    targets = [item[0].strip() for item in processed_lines]
-    
-    for target in targets:
-        if not (target[0].isalpha() or target[0] == '_') or not all(c.isalnum() or c == '_' for c in target):
-            raise ValueError(f"Invalid gene name: {target}")
-    
-    factors = [item[1].strip() for item in processed_lines]
-    probabilities = [float(item[2].strip()) if len(item) >= 3 else 1.0 for item in processed_lines]
-    
-    genes = list(set(targets + [factor for factor in factors]))
-    is_probabilistic = len(set(targets)) < len(targets)
-    
-    if symbolic:
-        if is_probabilistic:
-            raise ValueError("Probabilistic networks cannot be loaded with symbolic=True!")
-        interactions = {gene: factor for gene, factor in zip(targets, factors)}
+    for line_num, line in enumerate(lines, start=2):  # start=2 because we skip header
+        try:
+            bracket_count = 0
+            last_idx = 0
+            result = []
+           
+            for i, char in enumerate(line):
+                if char == "(":
+                    bracket_count += 1
+                elif char == ")":
+                    bracket_count -= 1
+                    if bracket_count < 0:
+                        raise ValueError(f"Unmatched closing bracket at position {i}")
+                elif char == body_separator and bracket_count == 0:
+                    result.append(line[last_idx:i].strip())
+                    last_idx = i + 1
+           
+            if bracket_count != 0:
+                raise ValueError("Unmatched brackets in expression")
+               
+            result.append(line[last_idx:].strip())
+            if not result[0]:  # Check for empty target
+                raise ValueError("Empty target name")
+               
+            processed_lines.append(result)
+           
+        except Exception as e:
+            raise ValueError(f"Error processing line {line_num}: {line}\nError: {str(e)}")
+
+    try:
+        targets = [item[0].strip() for item in processed_lines]
+       
+        for target in targets:
+            if not target:
+                raise ValueError("Empty target name found")
+            if not (target[0].isalpha() or target[0] == '_'):
+                raise ValueError(f"Target name must start with letter or underscore: {target}")
+            if not all(c.isalnum() or c == '_' for c in target):
+                raise ValueError(f"Invalid character in target name: {target}")
+
+        factors = [item[1].strip() for item in processed_lines]
+        probabilities = [float(item[2].strip()) if len(item) >= 3 else 1.0 for item in processed_lines]
+
+        genes = list(set(targets + [factor for factor in factors if factor.isalnum() or factor == '_']))
+        is_probabilistic = len(set(targets)) < len(targets)
+
+        if symbolic:
+            if is_probabilistic:
+                raise ValueError("Probabilistic networks cannot be loaded with symbolic=True!")
+            interactions = {gene: factor for gene, factor in zip(targets, factors)}
+            fixed = {gene: -1 for gene in genes}
+            return {"genes": genes, "interactions": interactions, "fixed": fixed}
+
+        interactions = {}
         fixed = {gene: -1 for gene in genes}
+       
+        for i, target in enumerate(targets):
+            interaction = {"func": factors[i]}
+            if is_probabilistic:
+                interaction["probability"] = probabilities[i]
+                interactions.setdefault(target, []).append(interaction)
+            else:
+                interactions[target] = interaction
+
         return {"genes": genes, "interactions": interactions, "fixed": fixed}
-    
-    interactions = {}
-    fixed = {gene: -1 for gene in genes}
-    
-    for i, target in enumerate(targets):
-        interaction = {"func": factors[i]}
-        if is_probabilistic:
-            interaction["probability"] = probabilities[i]
-            interactions.setdefault(target, []).append(interaction)
-        else:
-            interactions[target] = interaction
-    
-    return {"genes": genes, "interactions": interactions, "fixed": fixed}
+
+    except Exception as e:
+        raise ValueError(f"Error building network structure: {str(e)}")
 
 #markovSimulation
 def markov_simulation(network, num_iterations=1000, start_states=[], cutoff=0.001, return_table=True):
@@ -1413,7 +1560,7 @@ def get_change_indices(network, type, non_fixed_indices, gene_probabilities, cho
 
 
 #simulateSymbolicNetwork
-def simulateSymbolicModel(network, method="exhaustive", startStates=None, returnSequences=True, returnGraph=True, returnAttractors=True, maxTransitions=float('inf'), maxAttractorLength=float('inf'), canonical=True):
+def simulateSymbolicModel(network, method="exhaustive", start_states=None, returnSequences=True, returnGraph=True, returnAttractors=True, maxTransitions=float('inf'), maxAttractorLength=float('inf'), canonical=True):
     # Refresh internal tree representations if necessary
     if not network.get('internalStructs'):
         network['internalStructs'] = constructNetworkTrees(network)
@@ -1425,17 +1572,17 @@ def simulateSymbolicModel(network, method="exhaustive", startStates=None, return
     if isinstance(method, list):
         if maxAttractorLength is not None:
             method = "sat.restricted"
-        elif not startStates:
+        elif not start_states:
             method = "exhaustive"
-        elif isinstance(startStates, int):
-            if startStates > 1:
-                raise ValueError("Invalid startStates")
+        elif isinstance(start_states, int):
+            if start_states > 1:
+                raise ValueError("Invalid start_states")
             else:
                 method = "random"
-        elif isinstance(startStates, list):
+        elif isinstance(start_states, list):
             method = "chosen"
         else:
-            raise ValueError("Invalid startStates")
+            raise ValueError("Invalid start_states")
     
     valid_methods = ["exhaustive", "random", "chosen", "sat.exhaustive", "sat.restricted"]
     if method not in valid_methods:
@@ -1444,7 +1591,7 @@ def simulateSymbolicModel(network, method="exhaustive", startStates=None, return
     # Handle random method
     if method == "random":
         total_states = 2 ** sum([network['timeDelays'][i]] for i, val in enumerate(network['fixed']) if val == -1)
-        if startStates > total_states:
+        if start_states > total_states:
             method = "exhaustive"
             print("Warning: Performing exhaustive search")
     
@@ -1462,22 +1609,22 @@ def simulateSymbolicModel(network, method="exhaustive", startStates=None, return
     # Convert start states
     convertedStates = None
     if method == "exhaustive":
-        startStates = None
+        start_states = None
     elif method == "chosen":
         convertedStates = []
-        for state in startStates:
+        for state in start_states:
             if isinstance(state, np.ndarray):
                 if state.shape[1] != len(network['genes']):
-                    raise ValueError("Invalid startStates")
+                    raise ValueError("Invalid start_states")
                 convertedStates.append(state[::-1].astype(int))
             elif isinstance(state, (list, np.ndarray)):
                 if len(state) != len(network['genes']):
-                    raise ValueError("Invalid startStates")
+                    raise ValueError("Invalid start_states")
                 convertedStates.append(np.array(state, dtype=int))
             else:
-                raise ValueError("Invalid startStates")
+                raise ValueError("Invalid start_states")
     else:
-        convertedStates = np.array(startStates, dtype=int)
+        convertedStates = np.array(start_states, dtype=int)
     
     # Handle maxTransitions
     if maxTransitions == 0:

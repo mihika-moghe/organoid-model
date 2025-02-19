@@ -1,4 +1,3 @@
-from helper import calc_attr_score, pert_single, pert_double
 import pandas as pd
 import boolnet
 import time
@@ -7,14 +6,15 @@ from helper import calc_attr_score, pert_single, pert_double
 
 # Load network
 net = boolnet.load_network("A_model.txt")
-output_list = net('genes')
+output_list = net['genes'] 
 
 #########################
 #        Normal         #
 #########################
 
 start_time = time.time()
-attractors_Normal = net.get_attractors(
+attractors_Normal = boolnet.get_attractors(
+    net, 
     type="synchronous",
     method="random",
     start_states=1000000,
@@ -33,7 +33,8 @@ pheno_Normal = calc_attr_score(attractors_Normal, output_list)
 #       APOE4 SNP       #
 #########################
 start_time = time.time()
-attractors_APOE4 = net.get_attractors(
+attractors_APOE4 = boolnet.get_attractors(
+    net, 
     type="synchronous",
     method="random",
     start_states=1000000,
@@ -50,7 +51,8 @@ pheno_APOE4 = calc_attr_score(attractors_APOE4, output_list)
 #        LPL SNP        #
 #########################
 start_time = time.time()
-attractors_LPL = net.get_attractors(
+attractors_LPL = boolnet.get_attractors(
+    net,
     type="synchronous",
     method="random",
     start_states=1000000,
