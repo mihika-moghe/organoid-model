@@ -295,76 +295,121 @@ def generate_state(network, specs, default=0):
 
 
 #generateTimeSeries
-def generateTimeSeries(network, numSeries, numMeasurements, 
-                       type="synchronous", geneProbabilities=None, 
-                       perturbations=0, noiseLevel=0.0):
-    symbolic = isinstance(network, dict) and 'genes' in network
+
+def generateTimeSeries(network, numSeries=5, numMeasurements=10, 
+                      type="synchronous", geneProbabilities=None, 
+                      perturbations=0, noiseLevel=0.0):
+    
+    if not isinstance(network, dict) or 'genes' not in network:
+        raise ValueError("Invalid network structure")
+        
+    num_genes = len(network['genes'])
     
     if geneProbabilities is None:
-        geneProbabilities = [1.0 / len(network['genes'])] * len(network['genes'])
-    
+        geneProbabilities = [1.0 / num_genes] * num_genes
+        
     perturbationMatrix = None
     if perturbations > 0:
         perturbationMatrix = np.array([
-            [random.choice([0, 1]) if random.random() < perturbations / len(network['genes']) else np.nan
-             for _ in range(numSeries)]
-            for _ in range(len(network['genes']))
+            [np.random.choice([0, 1]) if np.random.random() < perturbations / num_genes 
+             else np.nan for _ in range(numSeries)]
+            for _ in range(num_genes)
         ])
     
     timeSeries = []
     for i in range(numSeries):
-        if symbolic:
-            if perturbations > 0:
-                fixedIdx = np.where(~np.isnan(perturbationMatrix[:, i]))[0]
-                fixedValues = perturbationMatrix[fixedIdx, i]
-            res = np.random.randint(2, size=(len(network['genes']), numMeasurements))
+        if perturbations > 0 and perturbationMatrix is not None:
+            fixedIdx = np.where(~np.isnan(perturbationMatrix[:, i]))[0]
+            start_states = np.random.randint(2, size=num_genes)
+            start_states[fixedIdx] = perturbationMatrix[fixedIdx, i]
         else:
-            start_states = np.random.randint(2, size=len(network['genes']))
+            start_states = np.random.randint(2, size=num_genes)
             
-            if perturbations > 0:
-                fixedIdx = np.where(~np.isnan(perturbationMatrix[:, i]))[0]
-                fixedValues = perturbationMatrix[fixedIdx, i]
-                start_states[fixedIdx] = fixedValues
-            
-            res = np.zeros((len(network['genes']), numMeasurements))
-            res[:, 0] = start_states
-            for j in range(1, numMeasurements):
-                if type == "synchronous":
-                    start_states = synchronousTransition(network, start_states)
-                elif type == "asynchronous":
-                    start_states = asynchronousTransition(network, start_states, geneProbabilities)
-                elif type == "probabilistic":
-                    start_states = probabilisticTransition(network, start_states, geneProbabilities)
-                res[:, j] = start_states
+        res = np.zeros((num_genes, numMeasurements))
+        res[:, 0] = start_states
         
+        for j in range(1, numMeasurements):
+            current_state = res[:, j-1].copy()
+            
+            if type == "synchronous":
+                res[:, j] = synchronousTransition(network, current_state)
+            elif type == "asynchronous":
+                res[:, j] = asynchronousTransition(network, current_state, geneProbabilities)
+            else:
+                raise ValueError(f"Invalid transition type: {type}")
+            
         if noiseLevel != 0:
             res = res + np.random.normal(0, noiseLevel, res.shape)
-        
+            
         timeSeries.append(res)
-    
-    if perturbations > 0:
+        
+    if perturbations > 0 and perturbationMatrix is not None:
         timeSeries.append({'perturbations': perturbationMatrix})
-    
+        
     return timeSeries
 
+
+
+
+
+
 def synchronousTransition(network, state):
-    return np.random.randint(2, size=len(state))
+  
+    if not isinstance(network, dict) or 'genes' not in network or 'interactions' not in network:
+        raise ValueError("Invalid network structure")
+        
+    next_state = np.zeros(len(state), dtype=int)
+    
+    for i, interaction in enumerate(network['interactions']):
+        input_states = state[interaction['input']]
+        
+        input_idx = 0
+        for j, input_state in enumerate(reversed(input_states)):
+            input_idx += input_state * (2**j)
+            
+        next_state[i] = interaction['func'][input_idx]
+        
+    return next_state
 
-def asynchronousTransition(network, state, geneProbabilities):
-    return np.random.randint(2, size=len(state))
 
-def probabilisticTransition(network, state, geneProbabilities):
-    return np.random.randint(2, size=len(state))
+def asynchronousTransition(network, state, geneProbabilities=None):
+    
+    if not isinstance(network, dict) or 'genes' not in network or 'interactions' not in network:
+        raise ValueError("Invalid network structure")
+        
+    next_state = state.copy()
+    
+    if geneProbabilities is None:
+        update_idx = np.random.randint(len(state))
+        genes_to_update = [update_idx]
+    else:
+        if len(geneProbabilities) != len(state):
+            raise ValueError("geneProbabilities must match number of genes")
+            
+        genes_to_update = []
+        for i, prob in enumerate(geneProbabilities):
+            if np.random.random() < prob:
+                genes_to_update.append(i)
+                
+    for idx in genes_to_update:
+        interaction = network['interactions'][idx]
+        
+        input_states = state[interaction['input']]
+        
+        input_idx = 0
+        for j, input_state in enumerate(reversed(input_states)):
+            input_idx += input_state * (2**j)
+            
+        next_state[idx] = interaction['func'][input_idx]
+        
+    return next_state
 
-network = {
-    'genes': ['Gene1', 'Gene2', 'Gene3'],
-}
 
-timeSeries = generateTimeSeries(network, numSeries=5, numMeasurements=10, type="synchronous", noiseLevel=0.1)
-for ts in timeSeries:
-    print(ts)
+
+
 
 #getAttractorSequence
+
 def getAttractorSequence(attractorInfo, attractorNo=None):
     if not (isinstance(attractorInfo, dict) and ('attractors' in attractorInfo or 'stateInfo' in attractorInfo)):
         raise ValueError("Invalid attractorInfo object.")
@@ -409,8 +454,6 @@ def dec2bin(decimal: int, num_bits: int, output_type: str = 'array') -> Union[Li
    else:
         raise ValueError("output_type must be either 'array' or 'list'")
 
-
-#getAttractors
 
 def get_attractors(network, type="synchronous", method="exhaustive", start_states=[], genes_on=[], genes_off=[],
                   canonical=True, randomChainLength=10000, avoidSelfLoops=True, geneProbabilities=None,
@@ -540,50 +583,61 @@ def get_attractors(network, type="synchronous", method="exhaustive", start_state
 def generateRandomStartStates(network, numStates):
     numGenes = len(network["genes"])
     
-    # Convert fixed to a list regardless of what it is
+    # Debug: Print fixed input
     try:
-        # Handle case where fixed might be a dictionary or other object
+        print("Original fixed:", network.get("fixed", "Missing"))  # Debugging print
         if isinstance(network["fixed"], dict):
             fixed_list = [-1] * numGenes  # Default all to unfixed
         else:
-            # Try to convert to list (works for lists, arrays, tuples, etc.)
             fixed_list = list(network["fixed"])
-    except:
-        # If conversion fails, just create an all unfixed list
+    except Exception as e:
+        print(f"Error handling fixed: {e}")
         fixed_list = [-1] * numGenes
-    
+
     # Make sure fixed_list is the right length
     if len(fixed_list) > numGenes:
         fixed_list = fixed_list[:numGenes]
     elif len(fixed_list) < numGenes:
         fixed_list.extend([-1] * (numGenes - len(fixed_list)))
-    
+
     # Normalize values
     for i in range(numGenes):
         if not isinstance(fixed_list[i], (int, float)) or fixed_list[i] not in [-1, 0, 1]:
-            fixed_list[i] = -1  # Set invalid values to unfixed
-    
+            fixed_list[i] = -1  
+
+    # Debug: Print processed fixed list
+    print("Processed fixed list:", fixed_list)  
+
     # Find positions that need random values
     nonFixedPositions = [i for i, val in enumerate(fixed_list) if val == -1]
     
+    # Debug: Print non-fixed positions
+    print("Non-fixed positions:", nonFixedPositions)
+
+    # Limit the number of states to prevent excessive computation
+    numStates = min(numStates, 1000)  # Adjust as needed
+
     # Generate states
     states = []
-    for _ in range(numStates):
+    for state_num in range(numStates):
+        print(f"Generating state {state_num + 1}/{numStates}")  # Debugging print
         state = np.zeros(numGenes, dtype=int)
-        
+
         # Set fixed values
         for i, val in enumerate(fixed_list):
             if val != -1:
                 state[i] = int(val)
-        
+
         # Set random values
         for pos in nonFixedPositions:
             state[pos] = np.random.choice([0, 1])
-        
-        states.append(state.tolist())
-    
-    return states
 
+        # Debug: Print each generated state
+        print(f"Generated state: {state.tolist()}")  
+
+        states.append(state.tolist())
+
+    return states
 
 
 
@@ -597,31 +651,6 @@ def validateStartStates(network, start_states):
     if len(validStates) != len(start_states):
         print("Warning: Some start states removed")
     return validStates
-
-"""def bin2dec(binary: Union[List[int], np.ndarray], length: Optional[int]=None) -> int:
-# Input validation
-    if isinstance(binary, np.ndarray):
-        binary = binary.tolist()
-    if not isinstance(binary, list):
-        raise TypeError(f"binary must be list or array, got {type(binary)}")
-    if not all(bit in (0, 1) for bit in binary):
-        raise ValueError("binary must contain only 0s and 1s")
-# Convert to decimal
-    return int(''.join(map(str, binary)), 2)
-
-    print(f"Binary input: {binary}")
-    
-    # Validate each bit
-    for i, bit in enumerate(binary):
-        if bit not in (0, 1):
-            raise ValueError(f"Invalid bit at position {i}: {bit}. All bits must be 0 or 1")
-    
-    try:
-        binary_str = ''.join(map(str, binary))
-        print(f"Binary string: {binary_str}")
-        return int(binary_str, 2)
-    except ValueError as e:
-        raise ValueError(f"Failed to convert binary {binary} to integer: {str(e)}")"""
 
 def bin2dec(binary: Union[List[int], np.ndarray, dict], length: Optional[int] = None) -> int:
     print(f"bin2dec input: {binary}, type: {type(binary)}")

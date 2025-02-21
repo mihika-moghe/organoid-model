@@ -64,7 +64,7 @@ def process_perturbation(node, net, off_node, on_node):
         genes_off = [node] if off_node is None else [off_node, node]
         genes_on = [on_node] if on_node is not None else None
         
-        attractors = net.get_attractors(
+        attractors = boolnet.get_attractors(
             type="synchronous",
             method="random",
             start_states=1000000,
@@ -142,4 +142,3 @@ def plotting (data, title):
      ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1))
      
      plt.show()
-
