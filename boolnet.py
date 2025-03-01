@@ -1651,17 +1651,13 @@ def constructNetworkTrees(network):
     timeDelays = network['timeDelays']
     fixed = network['fixed']
     
-    # Create a dictionary to store transition rules
     transitionRules = {}
     for i, gene in enumerate(genes):
-        if fixed[i] == -1:  # Gene is not fixed
-            # Example: Transition rule for gene i (placeholder logic)
+        if fixed[i] == -1:  
             transitionRules[gene] = lambda state: int(np.sum(state) % 2)   
         else:
-            # Fixed gene (always returns the fixed value)
             transitionRules[gene] = lambda state, val=fixed[i]: val
     
-    # Store the transition rules in the network
     network['internalStructs'] = transitionRules
     return transitionRules
 
@@ -1670,28 +1666,24 @@ def symbolicSATSearch(internalStructs, maxAttractorLength, isRestricted):
     genes = list(internalStructs.keys())
     numGenes = len(genes)
     
-    # Generate all possible states (for small networks, exhaustive search is feasible)
-    allStates = [tuple(np.random.randint(2, size=numGenes)) for _ in range(2 ** numGenes)]  # All possible states
+    allStates = [tuple(np.random.randint(2, size=numGenes)) for _ in range(2 ** numGenes)]   
     
     # Find attractors
     attractors = []
-    attractorAssignment = np.zeros(len(allStates), dtype=int)  # Track which states belong to which attractor
+    attractorAssignment = np.zeros(len(allStates), dtype=int)   
     for i, state in enumerate(allStates):
         if attractorAssignment[i] != 0:
-            continue  # Skip states already assigned to an attractor
+            continue  
         
         trajectory = [state]
         nextState = state
         for _ in range(maxAttractorLength if maxAttractorLength else 100):
-            # Compute the next state using the transition rules
             nextState = tuple(internalStructs[gene](nextState) for gene in genes)
             
             if nextState in trajectory:
-                # Found an attractor
                 attractorStartIndex = trajectory.index(nextState)
                 attractor = trajectory[attractorStartIndex:]
                 
-                # Check if this attractor is already recorded
                 isNewAttractor = True
                 for existingAttractor in attractors:
                     if len(existingAttractor) == len(attractor) and all(
@@ -1703,7 +1695,6 @@ def symbolicSATSearch(internalStructs, maxAttractorLength, isRestricted):
                 if isNewAttractor:
                     attractors.append(attractor)
                 
-                # Assign states in the trajectory to this attractor
                 for j in range(len(trajectory)):
                     stateIndex = allStates.index(trajectory[j])
                     attractorAssignment[stateIndex] = len(attractors)   
@@ -1723,12 +1714,10 @@ def simulateStates(internalStructs, convertedStates, maxTransitions, returnSeque
     genes = list(internalStructs.keys())
     numGenes = len(genes)
     
-    # Initialize results
     sequences = []
     graph = []
     attractors = []
     
-    # Simulate for each start state
     for state in convertedStates:
         trajectory = [state]
         nextState = state
@@ -1742,12 +1731,9 @@ def simulateStates(internalStructs, convertedStates, maxTransitions, returnSeque
                 break
             trajectory.append(nextState)
         
-        # Add to sequences
         sequences.append(trajectory)
         
-        # Add to graph
         for i in range(len(trajectory) - 1):
             graph.append((trajectory[i], trajectory[i + 1]))
     
-    # Return results
     return [sequences], [graph, [], []], attractors, []
