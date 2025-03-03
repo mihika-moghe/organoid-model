@@ -147,13 +147,13 @@ def calculate_efficacy(baseline_attractors, drug_attractors, output_list):
     baseline_scores = []
     for attractor in baseline_states:
         # Average state of each attractor
-        avg_state = np.mean(attractor['state'], axis=0)
+        avg_state = np.mean(attractor['involvedStates'], axis=0)
         # Focus on AD-relevant nodes
         baseline_scores.append([avg_state[i] for i in output_indices])
     
     drug_scores = []
     for attractor in drug_states:
-        avg_state = np.mean(attractor['state'], axis=0)
+        avg_state = np.mean(attractor['involvedStates'], axis=0)
         drug_scores.append([avg_state[i] for i in output_indices])
     
     # Average scores across all attractors
@@ -395,11 +395,35 @@ def predict_efficacy(model, drug_targets, output_list, condition="APOE4"):
         # Use as is if it's just the model
         ml_model = model
         
-    features = extract_features(drug_targets, output_list, condition)
-    prediction = ml_model.predict([features])[0]
+      
+    # Validate model type
+    if not hasattr(ml_model, 'predict'):
+        raise ValueError("Invalid model: The provided model does not have a predict method")
     
-    return prediction
-
+    # Extract features for prediction
+    features = extract_features(drug_targets, output_list, condition)
+    
+    # Validate feature length if model has feature_importances_ attribute
+    if hasattr(ml_model, 'feature_importances_'):
+        expected_features = len(ml_model.feature_importances_)
+        if len(features) != expected_features:
+            print(f"Warning: Feature length mismatch - model expects {expected_features} features but received {len(features)}")
+            # Try to match feature length, either by padding or truncating
+            if len(features) < expected_features:
+                print(f"Padding feature vector with zeros to match expected length")
+                features = features + [0] * (expected_features - len(features))
+            else:
+                print(f"Truncating feature vector to match expected length")
+                features = features[:expected_features]
+    
+    # Make prediction
+    try:
+        prediction = ml_model.predict([features])[0]
+        return prediction
+    except Exception as e:
+        print(f"Error during prediction: {str(e)}")
+        return None
+    
 def plot_drug_effects(node_changes, output_dir="drug_analysis"):
    
     # Create output directory if it doesn't exist
@@ -472,11 +496,27 @@ def run_perturbation_analysis(net, output_list, drug_targets, condition="APOE4")
     # Run single target perturbation analysis
     print("Running single perturbation analysis...")
     if single_targets:
-        pert_single_results = pert_single(single_targets, net, output_list, 
-                                           on_node=genes_on, off_node=genes_off)
-        single_results_t = pert_single_results.iloc[2:].T if pert_single_results.shape[0] > 2 else pd.DataFrame()
-    else:
-        single_results_t = pd.DataFrame()
+        try:
+            pert_single_results = pert_single(single_targets, net, output_list, 
+                                              on_node=genes_on, off_node=genes_off)
+            
+            # Check if results are empty or malformed
+            if isinstance(pert_single_results, dict) and 'attractors' in pert_single_results:
+                if not pert_single_results['attractors'] or len(pert_single_results['attractors']) == 0:
+                    print("Warning: No attractors found in single perturbation analysis")
+                    single_results_t = pd.DataFrame()
+                else:
+                    single_results_t = pert_single_results.iloc[2:].T if pert_single_results.shape[0] > 2 else pd.DataFrame()
+            else:
+                # Handle DataFrame return type
+                if isinstance(pert_single_results, pd.DataFrame) and pert_single_results.shape[0] > 2:
+                    single_results_t = pert_single_results.iloc[2:].T
+                else:
+                    print("Warning: Single perturbation analysis returned unexpected result format")
+                    single_results_t = pd.DataFrame()
+        except Exception as e:
+            print(f"Error in single perturbation analysis: {str(e)}")
+            single_results_t = pd.DataFrame()
     
     # Run double target perturbation analysis
     print("Running double perturbation analysis...")

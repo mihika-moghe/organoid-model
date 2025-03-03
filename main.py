@@ -2,6 +2,7 @@ import pandas as pd
 import boolnet
 import time
 from helper import calc_attr_score, pert_single, pert_double
+import efficacy
 
 
 print("Loading network...")
