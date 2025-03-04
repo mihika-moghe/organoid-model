@@ -11,9 +11,7 @@ from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import matplotlib.pyplot as plt
 
 def train_small_model(X, y, output_list=None):
-    """
-    A modified version of train_model that works with small datasets
-    """
+   
     print(f"Training model with {len(X)} samples...")
     
     # For very small datasets, just train on all data
@@ -112,16 +110,7 @@ def train_small_model(X, y, output_list=None):
         }
 
 def generate_synthetic_data(output_list, num_samples=20):
-    """
-    Generate synthetic training data based on literature findings
-    
-    Parameters:
-    output_list -- list of gene names in the network
-    num_samples -- number of synthetic data points to generate
-    
-    Returns:
-    synthetic_data -- list of tuples (targets, efficacy, condition)
-    """
+   
     synthetic_data = []
     
     # Define potential targets that could be affected by drugs
@@ -193,11 +182,7 @@ def generate_synthetic_data(output_list, num_samples=20):
     return synthetic_data
 
 def main():
-    """
-    Main function to execute the drug efficacy model training pipeline.
-    This script uses the existing functions in the efficacy.py module
-    to create a model trained on empirical data from the research papers.
-    """
+   
     print("=== Starting Alzheimer's Disease Drug Efficacy Model Training ===")
     
     # Step 1: Load the Boolean network model
