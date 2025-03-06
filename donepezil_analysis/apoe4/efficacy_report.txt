@@ -1,0 +1,75 @@
+================================================================================
+ALZHEIMER'S DISEASE DRUG EFFICACY REPORT
+Date: 2025-03-06 01:20:46
+================================================================================
+
+CONDITION: APOE4
+
+--------------------------------------------------------------------------------
+EFFICACY METRICS
+--------------------------------------------------------------------------------
+Overall Efficacy Score: 0.0064
+Composite Score: 0.1996
+Druggability Score: 0.7750
+Pharmacokinetic Score: 0.3360
+Safety Score: 0.8500
+
+--------------------------------------------------------------------------------
+PATHWAY EFFECTS
+--------------------------------------------------------------------------------
+Amyloid Pathway Effect: 0.0000
+Tau Pathway Effect: 0.0047
+Apoptosis Pathway Effect: 0.0033
+Autophagy Pathway Effect: 0.0000
+Lipid Pathway Effect: 0.0020
+Synaptic Pathway Effect: 0.0000
+
+--------------------------------------------------------------------------------
+GENE-LEVEL CHANGES
+--------------------------------------------------------------------------------
+MAPT: -0.0130 (DOWN)
+LC3: -0.0098 (DOWN)
+p53: -0.0095 (DOWN)
+mTOR: +0.0088 (UP)
+Ca_ion: -0.0050 (DOWN)
+GSK3beta: +0.0036 (UP)
+APP: +0.0031 (UP)
+BACE1: +0.0023 (UP)
+PTEN: -0.0020 (DOWN)
+Cholesterol: +0.0020 (UP)
+CASP3: -0.0009 (DOWN)
+Bcl2: +0.0004 (UP)
+
+--------------------------------------------------------------------------------
+BIOMARKER CHANGES BY BRAIN REGION
+--------------------------------------------------------------------------------
+
+AMYLOID PET SUVr VALUES:
+  entorhinal_cortex: 0.65 → 1.00 (+0.35)
+  hippocampus: 0.70 → 1.00 (+0.30)
+  parietal_lobe: 0.45 → 1.00 (+0.55)
+  posterior_cingulate: 0.55 → 1.00 (+0.45)
+  precuneus: 0.50 → 1.00 (+0.50)
+  prefrontal_cortex: 0.60 → 1.00 (+0.40)
+  temporal_lobe: 0.55 → 1.00 (+0.45)
+
+TAU PET SUVr VALUES:
+  entorhinal_cortex: 0.70 → 1.00 (+0.30)
+  hippocampus: 0.65 → 1.00 (+0.35)
+  parietal_lobe: 0.35 → 1.00 (+0.65)
+  posterior_cingulate: 0.40 → 1.00 (+0.60)
+  precuneus: 0.30 → 1.00 (+0.70)
+  prefrontal_cortex: 0.45 → 1.00 (+0.55)
+  temporal_lobe: 0.50 → 1.00 (+0.50)
+
+BRAIN ATROPHY MEASURES:
+  entorhinal_cortex: 0.10 → 0.10 (+0.00)
+  hippocampus: 0.15 → 0.15 (+0.00)
+  parietal_lobe: 0.05 → 0.05 (+0.00)
+  posterior_cingulate: 0.07 → 0.07 (+0.00)
+  precuneus: 0.05 → 0.05 (+0.00)
+  prefrontal_cortex: 0.08 → 0.08 (+0.00)
+  temporal_lobe: 0.12 → 0.12 (+0.00)
+
+================================================================================
+END OF REPORT

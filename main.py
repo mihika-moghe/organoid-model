@@ -214,4 +214,6 @@ else:
     print("ERROR: No valid perturbation data available for LPL analysis")
     filt_res = pd.DataFrame(columns=["RhoA", "JNK/Cdk5"])
 
+LPL_pert_res.to_csv("LPL_pert_res.txt", sep="\t")
+
 print("\nAnalysis complete")
