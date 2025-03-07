@@ -34,12 +34,7 @@ from efficacy import (
 from temporal_simulation import TemporalDrugSimulation
 
 def create_empirical_dataset():
-    """
-    Create a dataset from real drug data from literature and clinical trials.
-    
-    Returns:
-    List of tuples (targets, efficacy, condition)
-    """
+   
     empirical_data = []
     
     # Add data from known drugs in clinical trials
@@ -93,16 +88,7 @@ def create_empirical_dataset():
     return empirical_data
 
 def train_model(X, y):
-    """
-    Train a machine learning model to predict drug efficacy.
-    
-    Arguments:
-    X -- Features matrix
-    y -- Target values
-    
-    Returns:
-    Dictionary with model and evaluation metrics
-    """
+   
     print(f"Training model with {len(X)} samples...")
     
     # Handle small dataset sizes
@@ -172,18 +158,7 @@ def train_model(X, y):
 
 def training_pipeline(network_file="A_model.txt", model_file="ad_drug_efficacy_model.pkl", 
                      include_empirical=True, generate_plots=True):
-    """
-    Complete pipeline for training the drug efficacy model.
-    
-    Arguments:
-    network_file -- Path to the Boolean network model file
-    model_file -- Path to save the trained model
-    include_empirical -- Whether to include empirical data from literature
-    generate_plots -- Whether to generate evaluation plots
-    
-    Returns:
-    Dictionary with model and evaluation data
-    """
+   
     print("=== Starting Alzheimer's Disease Drug Efficacy Model Training ===")
     
     # Step 1: Load the Boolean network model

@@ -14,6 +14,8 @@ from scipy.ndimage import gaussian_filter
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split, KFold, cross_val_score
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from typing import Dict, Any, List
+import networkx as nx
 
 # Define known drug targets based on real data from DrugBank and ChEMBL
 # Data extracted from:
@@ -233,19 +235,11 @@ BRAIN_REGIONS = {
 }
 
 #===============================================================
-# Core Functions
+
 #===============================================================
 
 def load_network(network_file="A_model.txt"):
-    """
-    Load the Boolean network model.
-    
-    Arguments:
-    network_file -- Path to the network model file
-    
-    Returns:
-    Dictionary with the network and output list
-    """
+  
     print("Loading network...")
     net = boolnet.load_network(network_file)
     output_list = net['genes'] 
@@ -257,17 +251,7 @@ def load_network(network_file="A_model.txt"):
     }
 
 def get_baseline_state(net, output_list, condition="Normal"):
-    """
-    Get the baseline network state for a specific condition.
-    
-    Arguments:
-    net -- Boolean network
-    output_list -- List of genes in the network
-    condition -- Condition to simulate ("Normal", "APOE4", or "LPL")
-    
-    Returns:
-    Attractor states for the baseline condition
-    """
+   
     print(f"\nGetting baseline for {condition} condition...")
     start_time = time.time()
     
@@ -302,19 +286,7 @@ def get_baseline_state(net, output_list, condition="Normal"):
     return attractors
 
 def simulate_drug_effect(net, output_list, drug_name=None, drug_targets=None, condition="APOE4"):
-    """
-    Simulate the effect of a drug on the network.
-    
-    Arguments:
-    net -- Boolean network
-    output_list -- List of genes in the network
-    drug_name -- Name of known drug (if using predefined targets)
-    drug_targets -- List of (target, effect) tuples for custom drugs
-    condition -- Condition to simulate ("Normal", "APOE4", or "LPL")
-    
-    Returns:
-    Attractor states after drug application
-    """
+   
     # Set up simulation parameters
     genes_on = []
     genes_off = []
@@ -378,17 +350,7 @@ def simulate_drug_effect(net, output_list, drug_name=None, drug_targets=None, co
     return drug_attractors
 
 def calculate_efficacy(baseline_attractors, drug_attractors, output_list):
-    """
-    Calculate drug efficacy by comparing baseline and drug-treated network states.
-    
-    Arguments:
-    baseline_attractors -- Attractor states before drug application
-    drug_attractors -- Attractor states after drug application
-    output_list -- List of genes in the network
-    
-    Returns:
-    Dictionary with efficacy metrics
-    """
+   
     # Extract state matrices
     baseline_states = baseline_attractors['attractors']
     drug_states = drug_attractors['attractors']
@@ -449,20 +411,7 @@ def calculate_efficacy(baseline_attractors, drug_attractors, output_list):
     }
 
 def calculate_comprehensive_efficacy(baseline_attractors, drug_attractors, drug_name, condition, output_list, drug_targets=None):
-    """
-    Calculate a comprehensive set of efficacy metrics for a drug.
-    
-    Arguments:
-    baseline_attractors -- Attractor states before drug application
-    drug_attractors -- Attractor states after drug application
-    drug_name -- Name of the drug (for known drugs)
-    condition -- Condition being tested ("Normal", "APOE4", or "LPL")
-    output_list -- List of genes in the network
-    drug_targets -- List of (target, effect) tuples for custom drugs
-    
-    Returns:
-    Dictionary with comprehensive efficacy metrics
-    """
+   
     # Get basic efficacy metrics
     basic_metrics = calculate_efficacy(baseline_attractors, drug_attractors, output_list)
     efficacy_score = basic_metrics['efficacy_score']
@@ -564,17 +513,7 @@ def calculate_comprehensive_efficacy(baseline_attractors, drug_attractors, drug_
     }
 
 def extract_features(drug_targets, output_list, condition="APOE4"):
-    """
-    Extract features for machine learning model.
-    
-    Arguments:
-    drug_targets -- List of (target, effect) tuples
-    output_list -- List of genes in the network
-    condition -- Condition being tested ("Normal", "APOE4", or "LPL")
-    
-    Returns:
-    Feature vector
-    """
+   
     # Create a binary vector representing which nodes are targeted
     feature_vector = [0] * len(output_list)
     
@@ -598,18 +537,7 @@ def extract_features(drug_targets, output_list, condition="APOE4"):
     return feature_vector + condition_features
 
 def collect_training_data(net, output_list, known_drugs=None, additional_data=None):
-    """
-    Collect training data for machine learning model.
-    
-    Arguments:
-    net -- Boolean network
-    output_list -- List of genes in the network
-    known_drugs -- List of known drug names
-    additional_data -- Additional (targets, efficacy, condition) tuples
-    
-    Returns:
-    X, y, drug_info for training
-    """
+   
     X = []
     y = []
     drug_info = []  # Store additional information about each data point
@@ -706,28 +634,14 @@ def collect_training_data(net, output_list, known_drugs=None, additional_data=No
     return np.array(X), np.array(y), drug_info
 
 def save_model(model_data, filename="drug_efficacy_model.pkl"):
-    """
-    Save the trained model to a file.
-    
-    Arguments:
-    model_data -- Model and associated data to save
-    filename -- Output file name
-    """
+   
     with open(filename, 'wb') as f:
         pickle.dump(model_data, f)
     
     print(f"Model saved to {filename}")
 
 def load_model(filename="drug_efficacy_model.pkl"):
-    """
-    Load a trained model from a file.
-    
-    Arguments:
-    filename -- Model file name
-    
-    Returns:
-    Loaded model data
-    """
+   
     try:
         with open(filename, 'rb') as f:
             model_data = pickle.load(f)
@@ -738,17 +652,7 @@ def load_model(filename="drug_efficacy_model.pkl"):
         return None
 
 def predict_efficacy(model_data, drug_targets, condition="APOE4"):
-    """
-    Predict efficacy of a drug using the trained model.
-    
-    Arguments:
-    model_data -- Trained model data
-    drug_targets -- List of (target, effect) tuples
-    condition -- Condition to predict for ("Normal", "APOE4", or "LPL")
-    
-    Returns:
-    Predicted efficacy score
-    """
+   
     # Extract model and output list
     model = model_data['model']
     output_list = model_data['output_list']
@@ -762,72 +666,78 @@ def predict_efficacy(model_data, drug_targets, condition="APOE4"):
     return prediction
 
 def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", drug_name=None):
-    """
-    Generate advanced, realistic simulated brain PET scan data.
-    
-    Arguments:
-    node_changes -- Dictionary of node changes from drug effect
-    condition -- Patient condition ("Normal", "APOE4", or "LPL")
-    stage -- Scan stage: "baseline" or "post_treatment"
-    drug_name -- Name of the drug (optional, for reference)
-    
-    Returns:
-    Dictionary with simulated PET scan data for brain regions
-    """
-    # Advanced baseline with more nuanced condition-specific variability
+   
+    # Advanced baseline with condition-specific variability
     baseline_suvr = {
         'Normal': {
-            'amyloid_baseline': 1.2,
-            'tau_baseline': 1.1,
-            'atrophy_baseline': 0.05,
-            'variability': 0.1
+            'amyloid_suvr': 1.2,
+            'tau_suvr': 1.1,
+            'atrophy': 0.05,
+            'baseline_variability': 0.1
         },
         'APOE4': {
-            'amyloid_baseline': 1.8,
-            'tau_baseline': 1.6,
-            'atrophy_baseline': 0.15,
-            'variability': 0.2
+            'amyloid_suvr': 1.8,
+            'tau_suvr': 1.6,
+            'atrophy': 0.15,
+            'baseline_variability': 0.2
         },
         'LPL': {
-            'amyloid_baseline': 1.5,
-            'tau_baseline': 1.3,
-            'atrophy_baseline': 0.10,
-            'variability': 0.15
+            'amyloid_suvr': 1.5,
+            'tau_suvr': 1.3,
+            'atrophy': 0.10,
+            'baseline_variability': 0.15
         }
     }
     
-    # Enhanced drug-specific impact with more detailed metrics
+    # Detailed, mechanism-based drug impacts
     drug_impact = {
         'Lecanemab': {
-            'amyloid_reduction': {
-                'magnitude': -0.73,
+            'primary_mechanism': 'Anti-amyloid monoclonal antibody',
+            'amyloid_suvr': {
+                'global_magnitude': -0.40,  # More conservative reduction
                 'regional_variation': {
-                    'hippocampus': 1.2,
-                    'entorhinal_cortex': 1.1,
-                    'temporal_lobe': 1.0,
-                    'prefrontal_cortex': 0.9,
-                    'parietal_lobe': 0.8,
-                    'posterior_cingulate': 0.9,
-                    'precuneus': 0.8
-                }
+                    'hippocampus': 1.1,
+                    'entorhinal_cortex': 1.0,
+                    'temporal_lobe': 0.9,
+                    'prefrontal_cortex': 0.8,
+                    'parietal_lobe': 0.7,
+                    'posterior_cingulate': 0.8,
+                    'precuneus': 0.7
+                },
+                'stochasticity': 0.03
             },
-            'tau_reduction': {
-                'magnitude': -0.45,
+            'tau_suvr': {
+                'global_magnitude': -0.20,  # Moderate tau reduction
                 'regional_variation': {
-                    'hippocampus': 1.3,
-                    'entorhinal_cortex': 1.2,
-                    'temporal_lobe': 1.0,
-                    'prefrontal_cortex': 0.9,
-                    'parietal_lobe': 0.8,
-                    'posterior_cingulate': 0.9,
-                    'precuneus': 0.8
-                }
+                    'hippocampus': 1.0,
+                    'entorhinal_cortex': 0.9,
+                    'temporal_lobe': 0.8,
+                    'prefrontal_cortex': 0.7,
+                    'parietal_lobe': 0.6,
+                    'posterior_cingulate': 0.7,
+                    'precuneus': 0.6
+                },
+                'stochasticity': 0.02
             },
-            'atrophy_slowdown': -0.10
+            'atrophy': -0.05  # Moderate atrophy slowdown
         },
         'Memantine': {
-            'amyloid_reduction': {
-                'magnitude': -0.05,
+            'primary_mechanism': 'NMDA receptor antagonist',
+            'amyloid_suvr': {
+                'global_magnitude': -0.05,  # Minimal amyloid impact
+                'regional_variation': {
+                    'hippocampus': 0.6,
+                    'entorhinal_cortex': 0.5,
+                    'temporal_lobe': 0.4,
+                    'prefrontal_cortex': 0.3,
+                    'parietal_lobe': 0.2,
+                    'posterior_cingulate': 0.3,
+                    'precuneus': 0.2
+                },
+                'stochasticity': 0.01
+            },
+            'tau_suvr': {
+                'global_magnitude': -0.10,  # Slight neuroprotective effect
                 'regional_variation': {
                     'hippocampus': 0.7,
                     'entorhinal_cortex': 0.6,
@@ -836,142 +746,126 @@ def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", d
                     'parietal_lobe': 0.3,
                     'posterior_cingulate': 0.4,
                     'precuneus': 0.3
-                }
+                },
+                'stochasticity': 0.01
             },
-            'tau_reduction': {
-                'magnitude': -0.15,
-                'regional_variation': {
-                    'hippocampus': 0.7,
-                    'entorhinal_cortex': 0.6,
-                    'temporal_lobe': 0.5,
-                    'prefrontal_cortex': 0.4,
-                    'parietal_lobe': 0.3,
-                    'posterior_cingulate': 0.4,
-                    'precuneus': 0.3
-                }
-            },
-            'atrophy_slowdown': -0.05
+            'atrophy': -0.03  # Minimal atrophy slowdown
         },
         'Donepezil': {
-            'amyloid_reduction': {
-                'magnitude': 0.12,  # Slight increase due to cholinergic effects
+            'primary_mechanism': 'Acetylcholinesterase inhibitor',
+            'amyloid_suvr': {
+                'global_magnitude': 0.03,  # Very minimal change
                 'regional_variation': {
-                    'hippocampus': 1.1,
-                    'entorhinal_cortex': 1.0,
-                    'temporal_lobe': 0.9,
-                    'prefrontal_cortex': 1.0,
-                    'parietal_lobe': 0.9,
-                    'posterior_cingulate': 0.8,
-                    'precuneus': 0.8
-                }
+                    'hippocampus': 0.7,
+                    'entorhinal_cortex': 0.6,
+                    'temporal_lobe': 0.5,
+                    'prefrontal_cortex': 0.6,
+                    'parietal_lobe': 0.5,
+                    'posterior_cingulate': 0.4,
+                    'precuneus': 0.4
+                },
+                'stochasticity': 0.02
             },
-            'tau_reduction': {
-                'magnitude': -0.20,
+            'tau_suvr': {
+                'global_magnitude': -0.08,  # Slight reduction
                 'regional_variation': {
-                    'hippocampus': 1.1,
-                    'entorhinal_cortex': 1.0,
-                    'temporal_lobe': 0.9,
-                    'prefrontal_cortex': 1.0,
-                    'parietal_lobe': 0.9,
-                    'posterior_cingulate': 0.8,
-                    'precuneus': 0.8
-                }
+                    'hippocampus': 0.8,
+                    'entorhinal_cortex': 0.7,
+                    'temporal_lobe': 0.6,
+                    'prefrontal_cortex': 0.7,
+                    'parietal_lobe': 0.6,
+                    'posterior_cingulate': 0.5,
+                    'precuneus': 0.5
+                },
+                'stochasticity': 0.01
             },
-            'atrophy_slowdown': -0.08
+            'atrophy': -0.04  # Modest atrophy slowdown
         },
         'Galantamine': {
-            'amyloid_reduction': {
-                'magnitude': 0.10,  # Slight increase
+            'primary_mechanism': 'Acetylcholinesterase inhibitor & nicotinic receptor modulator',
+            'amyloid_suvr': {
+                'global_magnitude': 0.02,  # Extremely minimal change
                 'regional_variation': {
-                    'hippocampus': 1.1,
-                    'entorhinal_cortex': 1.0,
-                    'temporal_lobe': 0.9,
-                    'prefrontal_cortex': 1.0,
-                    'parietal_lobe': 0.9,
-                    'posterior_cingulate': 0.8,
-                    'precuneus': 0.8
-                }
+                    'hippocampus': 0.6,
+                    'entorhinal_cortex': 0.5,
+                    'temporal_lobe': 0.4,
+                    'prefrontal_cortex': 0.5,
+                    'parietal_lobe': 0.4,
+                    'posterior_cingulate': 0.3,
+                    'precuneus': 0.3
+                },
+                'stochasticity': 0.01
             },
-            'tau_reduction': {
-                'magnitude': -0.15,
+            'tau_suvr': {
+                'global_magnitude': -0.06,  # Very slight reduction
                 'regional_variation': {
-                    'hippocampus': 1.1,
-                    'entorhinal_cortex': 1.0,
-                    'temporal_lobe': 0.9,
-                    'prefrontal_cortex': 1.0,
-                    'parietal_lobe': 0.9,
-                    'posterior_cingulate': 0.8,
-                    'precuneus': 0.8
-                }
+                    'hippocampus': 0.7,
+                    'entorhinal_cortex': 0.6,
+                    'temporal_lobe': 0.5,
+                    'prefrontal_cortex': 0.6,
+                    'parietal_lobe': 0.5,
+                    'posterior_cingulate': 0.4,
+                    'precuneus': 0.4
+                },
+                'stochasticity': 0.01
             },
-            'atrophy_slowdown': -0.07
+            'atrophy': -0.03  # Minimal atrophy slowdown
         }
     }
     
     # Get baseline values for this condition
     baseline = baseline_suvr.get(condition, baseline_suvr['Normal'])
     
-    # Pharmacokinetic-inspired variability
-    def get_pk_modifier(drug_name):
-        """Adjust effect based on drug's pharmacokinetic properties"""
-        if drug_name in PHARMACOKINETICS:
-            pk = PHARMACOKINETICS[drug_name]
-            # Consider half-life and blood-brain barrier penetration
-            half_life_factor = min(pk.get('half_life', 24) / 24, 1.5)
-            bbb_factor = pk.get('bbb_penetration', 0.5)
-            return half_life_factor * bbb_factor
-        return 1.0
-    
     # Get drug-specific impact
     drug_effect = drug_impact.get(drug_name, {
-        'amyloid_reduction': {'magnitude': -0.1, 'regional_variation': {}},
-        'tau_reduction': {'magnitude': -0.1, 'regional_variation': {}},
-        'atrophy_slowdown': -0.05
+        'amyloid_suvr': {
+            'global_magnitude': 0,
+            'regional_variation': {},
+            'stochasticity': 0.02
+        },
+        'tau_suvr': {
+            'global_magnitude': 0,
+            'regional_variation': {},
+            'stochasticity': 0.02
+        },
+        'atrophy': 0
     })
     
-    # Apply pharmacokinetic modifier
-    pk_modifier = get_pk_modifier(drug_name)
+    # Regions to analyze
+    regions = [
+        'hippocampus', 'entorhinal_cortex', 'temporal_lobe', 
+        'prefrontal_cortex', 'parietal_lobe', 
+        'posterior_cingulate', 'precuneus'
+    ]
     
     # Combine baseline values with drug-specific changes
     pet_data = {}
-    for region in ['hippocampus', 'entorhinal_cortex', 'temporal_lobe', 
-                   'prefrontal_cortex', 'parietal_lobe', 
-                   'posterior_cingulate', 'precuneus']:
-        # Start with baseline values
+    for region in regions:
+        # Start with baseline values and add variability
         region_pet = {
-            'amyloid_suvr': baseline['amyloid_baseline'],
-            'tau_suvr': baseline['tau_baseline'],
-            'atrophy': baseline['atrophy_baseline']
+            'amyloid_suvr': baseline['amyloid_suvr'] * (1 + np.random.uniform(-baseline['baseline_variability'], baseline['baseline_variability'])),
+            'tau_suvr': baseline['tau_suvr'] * (1 + np.random.uniform(-baseline['baseline_variability'], baseline['baseline_variability'])),
+            'atrophy': baseline['atrophy']
         }
         
-        # Add random variability based on condition
-        variability = baseline['variability']
-        region_pet['amyloid_suvr'] *= (1 + np.random.uniform(-variability, variability))
-        region_pet['tau_suvr'] *= (1 + np.random.uniform(-variability, variability))
-        region_pet['atrophy'] *= (1 + np.random.uniform(-variability, variability))
+        # Apply amyloid changes
+        amyloid_reduction = drug_effect['amyloid_suvr']['global_magnitude']
+        amyloid_regional_factor = drug_effect['amyloid_suvr']['regional_variation'].get(region, 1.0)
+        amyloid_stochasticity = drug_effect['amyloid_suvr']['stochasticity']
         
-        # Apply drug-specific changes with region-specific sensitivity
-        # Amyloid SUVr
-        amyloid_reduction = drug_effect['amyloid_reduction']['magnitude']
-        amyloid_regional_factor = drug_effect['amyloid_reduction']['regional_variation'].get(region, 1.0)
-        region_pet['amyloid_suvr'] += amyloid_reduction * amyloid_regional_factor * pk_modifier
+        region_pet['amyloid_suvr'] += (amyloid_reduction * amyloid_regional_factor) + \
+                                      np.random.normal(0, amyloid_stochasticity)
         
-        # Tau SUVr
-        tau_reduction = drug_effect['tau_reduction']['magnitude']
-        tau_regional_factor = drug_effect['tau_reduction']['regional_variation'].get(region, 1.0)
-        region_pet['tau_suvr'] += tau_reduction * tau_regional_factor * pk_modifier
+        # Apply tau changes
+        tau_reduction = drug_effect['tau_suvr']['global_magnitude']
+        tau_regional_factor = drug_effect['tau_suvr']['regional_variation'].get(region, 1.0)
+        tau_stochasticity = drug_effect['tau_suvr']['stochasticity']
         
-        # Atrophy
-        region_pet['atrophy'] += drug_effect['atrophy_slowdown'] * pk_modifier
+        region_pet['tau_suvr'] += (tau_reduction * tau_regional_factor) + \
+                                  np.random.normal(0, tau_stochasticity)
         
-        # Apply additional changes from node perturbations
-        for pathway, change in node_changes.items():
-            if pathway == 'Amyloid':
-                region_pet['amyloid_suvr'] += change * 0.1
-            elif pathway == 'Tau':
-                region_pet['tau_suvr'] += change * 0.1
-            elif pathway in ['Apoptosis', 'Synaptic', 'Autophagy']:
-                region_pet['atrophy'] += change * 0.05
+        # Apply atrophy changes
+        region_pet['atrophy'] += drug_effect.get('atrophy', 0)
         
         # Ensure values stay within realistic ranges
         region_pet['amyloid_suvr'] = max(1.0, min(region_pet['amyloid_suvr'], 3.0))
@@ -986,23 +880,13 @@ def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", d
         'condition': condition,
         'stage': stage,
         'drug_name': drug_name,
-        'pk_modifier': pk_modifier
+        'primary_mechanism': drug_effect.get('primary_mechanism', 'Unknown')
     }
     
     return pet_data
 
 def visualize_pet_scan(baseline_pet, post_treatment_pet=None, output_dir="pet_scans"):
-    """
-    Create visualizations of simulated PET scans.
-    
-    Arguments:
-    baseline_pet -- Baseline PET scan data
-    post_treatment_pet -- Post-treatment PET scan data (optional)
-    output_dir -- Directory to save visualization images
-    
-    Returns:
-    Dictionary with paths to saved visualization files
-    """
+   
     os.makedirs(output_dir, exist_ok=True)
     
     # Define custom colormaps
@@ -1108,16 +992,7 @@ def visualize_pet_scan(baseline_pet, post_treatment_pet=None, output_dir="pet_sc
     return figure_paths
 
 def generate_pet_data(efficacy_data, condition="APOE4"):
-    """
-    Generate simulated PET scan data based on efficacy results.
     
-    Arguments:
-    efficacy_data -- Results from efficacy calculation
-    condition -- Condition being simulated
-    
-    Returns:
-    Dictionary with baseline and post-treatment PET data
-    """
     # Baseline PET values by brain region for the condition
     baseline_pet = {}
     
@@ -1180,20 +1055,7 @@ def generate_pet_data(efficacy_data, condition="APOE4"):
     }
 
 def evaluate_drug_efficacy(net, output_list, drug_name=None, drug_targets=None, conditions=None, output_dir=None):
-    """
-    Evaluate the efficacy of a drug across multiple conditions.
-    
-    Arguments:
-    net -- Boolean network
-    output_list -- List of genes in the network
-    drug_name -- Name of known drug (if using predefined targets)
-    drug_targets -- List of (target, effect) tuples for custom drugs
-    conditions -- List of conditions to test (default: ["APOE4", "Normal"])
-    output_dir -- Directory to save outputs (default: drug name or "custom_drug")
-    
-    Returns:
-    Dictionary with efficacy results for each condition
-    """
+   
     if conditions is None:
         conditions = ["APOE4", "Normal"]
     
@@ -1263,14 +1125,7 @@ def evaluate_drug_efficacy(net, output_list, drug_name=None, drug_targets=None, 
     return results
 
 def create_efficacy_report(efficacy_data, pet_data, output_file):
-    """
-    Create a comprehensive text report of drug efficacy.
     
-    Arguments:
-    efficacy_data -- Results from efficacy calculation
-    pet_data -- PET scan data
-    output_file -- Path to save the report
-    """
     with open(output_file, 'w') as f:
         # Write header
         f.write("=" * 80 + "\n")
@@ -1351,9 +1206,7 @@ def create_efficacy_report(efficacy_data, pet_data, output_file):
         f.write("END OF REPORT\n")
 
 class PETScanGenerator:
-    """
-    Generate realistic PET scan DICOM files based on drug efficacy simulation results.
-    """
+   
     
     # Brain region coordinates (simplified 3D model)
     # Format: [x_center, y_center, z_center, radius]
@@ -1409,12 +1262,7 @@ class PETScanGenerator:
     }
     
     def __init__(self, output_dir="pet_scans"):
-        """
-        Initialize the PET scan generator.
-        
-        Args:
-            output_dir: Directory to save the DICOM files
-        """
+       
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         
@@ -1422,12 +1270,7 @@ class PETScanGenerator:
         self.img_shape = (128, 128, 80)  # x, y, z
     
     def _create_brain_mask(self):
-        """
-        Create a binary mask of the brain.
-        
-        Returns:
-            3D numpy array with brain mask
-        """
+       
         mask = np.zeros(self.img_shape, dtype=np.float32)
         
         # Create ellipsoid for brain
@@ -1446,16 +1289,7 @@ class PETScanGenerator:
         return mask
     
     def _create_region_values(self, region_values, tracer_type):
-        """
-        Create a 3D array with region-specific values.
-        
-        Args:
-            region_values: Dictionary of region names and their values
-            tracer_type: 'amyloid' or 'tau'
-            
-        Returns:
-            3D numpy array with region values
-        """
+       
         # Initialize with background SUVr
         background = 0.8 if tracer_type == 'amyloid' else 0.7
         img = np.ones(self.img_shape, dtype=np.float32) * background
@@ -1485,19 +1319,7 @@ class PETScanGenerator:
         return img
     
     def _create_dicom_file(self, img_data, patient_id, tracer_type, stage, output_file):
-        """
-        Create a DICOM file from image data.
-        
-        Args:
-            img_data: 3D numpy array with image data
-            patient_id: Patient ID string
-            tracer_type: 'amyloid' or 'tau'
-            stage: 'baseline' or 'post_treatment'
-            output_file: Path to save the DICOM file
-            
-        Returns:
-            Path to the created DICOM file
-        """
+       
         # Create file meta information
         file_meta = Dataset()
         file_meta.MediaStorageSOPClassUID = '1.2.840.10008.5.1.4.1.1.128'  # PET Image Storage
@@ -1555,17 +1377,7 @@ class PETScanGenerator:
         return output_file
         
     def generate_pet_images(self, pet_data, patient_id, output_dir=None):
-        """
-        Generate DICOM PET images for baseline and post-treatment data.
-        
-        Args:
-            pet_data: Dictionary with baseline and post-treatment PET data
-            patient_id: Patient ID string
-            output_dir: Directory to save DICOM files (default: self.output_dir)
-            
-        Returns:
-            Dictionary with paths to generated DICOM files
-        """
+       
         if output_dir is None:
             output_dir = self.output_dir
             

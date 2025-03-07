@@ -36,19 +36,10 @@ except ImportError:
             os.makedirs(output_dir, exist_ok=True)
 
 class TemporalDrugSimulation:
-    """
-    Simulate the temporal effects of drug therapies for Alzheimer's disease
-    over various timepoints (1 month, 6 months, 1 year, 3 years).
-    """
+   
     
     def __init__(self, network_file="A_model.txt", output_dir="temporal_simulation"):
-        """
-        Initialize the temporal simulation.
-        
-        Args:
-            network_file: Path to the network model file
-            output_dir: Directory to save simulation results
-        """
+       
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         
@@ -205,11 +196,7 @@ class TemporalDrugSimulation:
         for months in self.timepoints:
             print(f"Simulating {months} month{'s' if months > 1 else ''} timepoint...")
             
-            # Calculate the drug effect at this timepoint considering:
-            # 1. Natural disease progression
-            # 2. Sustained drug effect (possibly decreasing over time)
-            # 3. Cumulative effects on brain pathology
-            
+        
             # Get adjusted pathway changes based on time
             time_adjusted_changes = self._calculate_time_adjusted_changes(
                 initial_efficacy['pathway_changes'],
@@ -271,18 +258,7 @@ class TemporalDrugSimulation:
         return temporal_results
     
     def _calculate_time_adjusted_changes(self, initial_pathway_changes, drug_info, condition, months):
-        """
-        Calculate pathway changes adjusted for time progression.
-        
-        Args:
-            initial_pathway_changes: Initial pathway changes from drug
-            drug_info: Drug information dictionary
-            condition: Patient condition
-            months: Number of months since treatment started
-            
-        Returns:
-            Dictionary with time-adjusted pathway changes
-        """
+       
         # Get progression rates for this condition
         progression = self.progression_rates[condition]
         
@@ -351,18 +327,7 @@ class TemporalDrugSimulation:
         return timepoint_pet
     
     def _adjust_score_for_time(self, initial_score, drug_info, condition, months):
-        """
-        Adjust efficacy score for temporal effects.
-        
-        Args:
-            initial_score: Initial efficacy score
-            drug_info: Drug information
-            condition: Patient condition
-            months: Months since treatment started
-            
-        Returns:
-            Adjusted efficacy score
-        """
+       
         # Get progression rate based on condition
         progression_rate = 0.004 if condition == "Normal" else 0.007  # Monthly rate
         
@@ -381,18 +346,7 @@ class TemporalDrugSimulation:
         return max(0, min(adjusted_score, 1.0))
     
     def _adjust_pathway_scores_for_time(self, initial_scores, drug_info, condition, months):
-        """
-        Adjust pathway-specific scores for temporal effects.
-        
-        Args:
-            initial_scores: Initial pathway scores
-            drug_info: Drug information
-            condition: Patient condition
-            months: Months since treatment started
-            
-        Returns:
-            Adjusted pathway scores
-        """
+       
         adjusted_scores = {}
         progression = self.progression_rates[condition]
         
@@ -415,17 +369,7 @@ class TemporalDrugSimulation:
     
     def _calculate_node_changes_at_timepoint(self, initial_node_changes, 
                                           adjusted_pathway_changes, months):
-        """
-        Calculate node changes at a specific timepoint.
-        
-        Args:
-            initial_node_changes: Initial node changes
-            adjusted_pathway_changes: Time-adjusted pathway changes
-            months: Months since treatment started
-            
-        Returns:
-            Node changes at this timepoint
-        """
+       
         # Group nodes by pathway
         pathway_nodes = {}
         for pathway, nodes in PATHWAYS.items():
@@ -455,15 +399,7 @@ class TemporalDrugSimulation:
         return node_changes
     
     def _calculate_composite_score(self, timepoint_efficacy):
-        """
-        Calculate composite score for a timepoint.
-        
-        Args:
-            timepoint_efficacy: Efficacy data for this timepoint
-            
-        Returns:
-            Composite score
-        """
+       
         # Simplified composite score calculation
         factors = [timepoint_efficacy['efficacy_score']]
         weights = [0.6]  # Higher weight for overall efficacy
@@ -481,15 +417,7 @@ class TemporalDrugSimulation:
         return max(0, min(composite, 1.0))
         
     def _predict_mmse_scores(self, temporal_results):
-        """
-        Predict MMSE (Mini-Mental State Examination) scores over time.
-        
-        Args:
-            temporal_results: Dictionary with temporal simulation results
-            
-        Returns:
-            List of predicted MMSE scores
-        """
+       
         drug_info = temporal_results["drug_info"]
         condition = temporal_results["condition"]
         
@@ -531,16 +459,7 @@ class TemporalDrugSimulation:
         return mmse_scores
     
     def _predict_baseline_mmse_decline(self, condition, max_months):
-        """
-        Predict baseline MMSE decline without treatment.
-        
-        Args:
-            condition: Patient condition
-            max_months: Maximum months to predict
-            
-        Returns:
-            List of predicted MMSE scores without treatment
-        """
+       
         # Starting MMSE score
         if condition == "APOE4":
             starting_mmse = 25
@@ -559,13 +478,7 @@ class TemporalDrugSimulation:
         return mmse_scores
     
     def _generate_temporal_comparison_visuals(self, temporal_results, output_dir):
-        """
-        Generate visualizations comparing results across timepoints.
-        
-        Args:
-            temporal_results: Dictionary with results for all timepoints
-            output_dir: Directory to save visualizations
-        """
+      
         drug_name = temporal_results["drug_info"]["name"]
         condition = temporal_results["condition"]
         
