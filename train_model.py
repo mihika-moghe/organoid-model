@@ -298,8 +298,9 @@ def training_pipeline(network_file="A_model.txt", model_file="ad_drug_efficacy_m
         raise
     
     # Predefined drugs and conditions for temporal simulation
+    # Update to include all four drugs: Ritzaganine, Memantine, Donepezil, Galantamine
     drugs_to_simulate = [
-        "Lecanemab", 
+        "Ritzaganine", 
         "Memantine", 
         "Donepezil", 
         "Galantamine"
@@ -335,6 +336,14 @@ def training_pipeline(network_file="A_model.txt", model_file="ad_drug_efficacy_m
     
     # Optional: Generate summary plots or reports 
     # This is a placeholder for additional post-processing of temporal results
+    
+    # Save the trained model
+    save_model({
+        'model': model_results['model'],
+        'output_list': output_list,
+        'metrics': model_results.get('metrics', {}),
+    }, model_file)
+    print(f"Model saved to {model_file}")
     
     # Return both model results and temporal simulation results
     return {

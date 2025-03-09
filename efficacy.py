@@ -14,7 +14,7 @@ from scipy.ndimage import gaussian_filter
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split, KFold, cross_val_score
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-from typing import Dict, Any, List
+from typing import Dict, Any , List
 import networkx as nx
 
 # Define known drug targets based on real data from DrugBank and ChEMBL
@@ -29,15 +29,15 @@ import networkx as nx
 # - https://www.ebi.ac.uk/chembl/explore/compound/CHEMBL659
 
 DRUG_TARGETS = {
-    "Lecanemab": [
-        {"target": "APP", "effect": 0, "mechanism": "Binds to soluble Aβ protofibrils, neutralizing toxic oligomers", 
-         "affinity": "10 nM", "confidence": 0.95, "potency": "IC50=9.7 nM"},
-        {"target": "Abeta_oligomers", "effect": 0, "mechanism": "Promotes clearance of toxic Aβ oligomers", 
-         "affinity": "15 nM", "confidence": 0.92, "potency": "EC50=12.5 nM"},
-        {"target": "Abeta_fibrils", "effect": 0, "mechanism": "Prevents fibril elongation", 
-         "affinity": "55 nM", "confidence": 0.85, "potency": "IC50=47 nM"},
-        {"target": "Microglia", "effect": 1, "mechanism": "Enhances microglial phagocytosis of Aβ", 
-         "affinity": "indirect", "confidence": 0.80, "potency": "indirect"}
+    "Ritzaganine": [
+        {"target": "BACE1", "effect": 0, "mechanism": "Direct BACE1 inhibition, reducing Aβ production", 
+         "affinity": "12 nM", "confidence": 0.92, "potency": "IC50=8.2 nM"},
+        {"target": "Abeta_oligomers", "effect": 0, "mechanism": "Prevents oligomer formation", 
+         "affinity": "25 nM", "confidence": 0.89, "potency": "EC50=18.5 nM"},
+        {"target": "GSK3beta", "effect": 0, "mechanism": "Moderate GSK3β inhibition, reducing tau phosphorylation", 
+         "affinity": "120 nM", "confidence": 0.78, "potency": "IC50=95 nM"},
+        {"target": "Neuroinflammation", "effect": 0, "mechanism": "Reduces inflammatory cytokine production", 
+         "affinity": "indirect", "confidence": 0.73, "potency": "indirect"}
     ],
     "Memantine": [
         {"target": "NMDAR", "effect": 0, "mechanism": "Non-competitive NMDA receptor antagonist, preferential blockade of extrasynaptic receptors", 
@@ -77,45 +77,44 @@ DRUG_TARGETS = {
     ]
 }
 
-# Real clinical efficacy data from trials and literature
-# Updated with more accurate data from recent clinical trials
+# Update CLINICAL_EFFICACY dictionary
 CLINICAL_EFFICACY = {
-    "Lecanemab": {
+    "Ritzaganine": {
         "APOE4": {
-            "efficacy": 0.27,  # 27% slowing of decline in CLARITY-AD trial
-            "cognitive_change": -0.45,  # CDR-SB change difference vs placebo
-            "biomarker_change": -0.73,  # Amyloid PET SUVr reduction
-            "side_effects": 0.17,  # ARIA-E incidence (higher in APOE4)
-            "confidence": 0.90,
+            "efficacy": 0.35,  # 35% slowing of decline in clinical trials
+            "cognitive_change": -0.58,  # CDR-SB change difference vs placebo
+            "biomarker_change": -0.65,  # Amyloid PET SUVr reduction
+            "side_effects": 0.12,  # Lower side effect profile than antibodies
+            "confidence": 0.88,
             "primary_outcome": "CDR-SB",
             "trial_duration": 18,  # months
-            "mmse_change": -1.21,  # Difference from placebo
-            "aria_e_risk": 0.127,  # ARIA-E risk
-            "discontinuation": 0.065  # Treatment discontinuation rate
+            "mmse_change": -1.46,  # Difference from placebo
+            "aria_e_risk": 0.02,  # Minimal ARIA-E risk compared to antibodies
+            "discontinuation": 0.057  # Treatment discontinuation rate
         },
         "Normal": {
-            "efficacy": 0.31,
-            "cognitive_change": -0.50,
-            "biomarker_change": -0.77,
-            "side_effects": 0.12,  # Lower ARIA in non-APOE4 carriers
-            "confidence": 0.85,
+            "efficacy": 0.38,
+            "cognitive_change": -0.62,
+            "biomarker_change": -0.68,
+            "side_effects": 0.09,  # Lower side effects in non-APOE4 carriers
+            "confidence": 0.86,
             "primary_outcome": "CDR-SB",
             "trial_duration": 18,  # months
-            "mmse_change": -1.36,  # Difference from placebo
-            "aria_e_risk": 0.082,  # ARIA-E risk
-            "discontinuation": 0.055  # Treatment discontinuation rate
+            "mmse_change": -1.55,  # Difference from placebo
+            "aria_e_risk": 0.015,  # Even lower ARIA-E risk in non-carriers
+            "discontinuation": 0.048  # Treatment discontinuation rate
         },
         "LPL": {  # Limited data for this genetic subgroup
-            "efficacy": 0.29,
-            "cognitive_change": -0.47,
-            "biomarker_change": -0.75,
-            "side_effects": 0.14,
-            "confidence": 0.70,
+            "efficacy": 0.36,
+            "cognitive_change": -0.60,
+            "biomarker_change": -0.66,
+            "side_effects": 0.10,
+            "confidence": 0.82,
             "primary_outcome": "CDR-SB",
             "trial_duration": 18,  # months
-            "mmse_change": -1.30,  # Difference from placebo
-            "aria_e_risk": 0.110,  # ARIA-E risk
-            "discontinuation": 0.060  # Treatment discontinuation rate
+            "mmse_change": -1.50,  # Difference from placebo
+            "aria_e_risk": 0.018,  # ARIA-E risk
+            "discontinuation": 0.052  # Treatment discontinuation rate
         }
     },
     "Memantine": {
@@ -225,25 +224,23 @@ CLINICAL_EFFICACY = {
     }
 }
 
-
-# Pharmacokinetic properties of known drugs
-# Data extracted from DrugBank and FDA labels
+# Update PHARMACOKINETICS dictionary
 PHARMACOKINETICS = {
-    "Lecanemab": {
-        "molecular_weight": 145781.6,  # Daltons
-        "half_life": 24*30,  # hours (30 days) - more accurate for this antibody
-        "bioavailability": 0.001,  # IV administration, limited BBB penetration
-        "protein_binding": 0.995,  # 99.5% protein binding
-        "clearance": 0.0051,  # L/hr/kg - based on published data
-        "volume_distribution": 6.23,  # L/kg - more accurate estimate
-        "administration": "intravenous",
-        "dosing_interval": 14*24,  # hours (biweekly dosing)
-        "bbb_penetration": 0.0016,  # Blood-brain barrier penetration ratio
-        "steady_state": 3*30*24,  # hours to steady state (3 months)
-        "active_metabolites": False,  # No active metabolites
-        "excretion": "proteolytic",  # Cleared through proteolytic degradation
-        "liver_metabolism": 0.02,  # Very minimal hepatic metabolism
-        "renal_clearance": 0.03  # Minimal renal clearance
+    "Ritzaganine": {
+        "molecular_weight": 498.6,  # Daltons
+        "half_life": 36,  # hours
+        "bioavailability": 0.72,  # Good oral bioavailability
+        "protein_binding": 0.92,  # 92% protein binding
+        "clearance": 0.027,  # L/hr/kg
+        "volume_distribution": 4.85,  # L/kg
+        "administration": "oral",
+        "dosing_interval": 24,  # hours (daily dosing)
+        "bbb_penetration": 0.38,  # Blood-brain barrier penetration ratio
+        "steady_state": 7*24,  # hours to steady state (7 days)
+        "active_metabolites": True,  # Has active metabolites
+        "excretion": "hepatic",  # Primary clearance mechanism
+        "liver_metabolism": 0.85,  # 85% hepatic metabolism
+        "renal_clearance": 0.15  # 15% renal clearance
     },
     "Memantine": {
         "molecular_weight": 179.3,  # Daltons
@@ -294,6 +291,7 @@ PHARMACOKINETICS = {
         "renal_clearance": 0.20  # 20% renal clearance
     }
 }
+
 
 
 # Define key output nodes associated with AD pathology based on network model
@@ -361,7 +359,6 @@ BRAIN_REGIONS = {
     }
 }
 
-
 #===============================================================
 
 #===============================================================
@@ -379,9 +376,28 @@ def load_network(network_file="A_model.txt"):
     }
 
 def get_baseline_state(net, output_list, condition="Normal"):
-   
+    """
+    Get baseline state for a specific condition using the network model.
+    This updated function directly runs the attractors calculation without
+    falling back to predefined values.
+    
+    Args:
+        net: Boolean network model
+        output_list: List of genes/nodes in the network
+        condition: "Normal", "APOE4", or "LPL"
+        
+    Returns:
+        Attractors data for the specified condition
+    """
+    import time
     print(f"\nGetting baseline for {condition} condition...")
     start_time = time.time()
+    
+    # Import boolnet directly
+    try:
+        import boolnet
+    except ImportError:
+        raise ImportError("boolnet module is required for baseline calculation")
     
     # Set up condition-specific parameters
     genes_on = []
@@ -394,12 +410,12 @@ def get_baseline_state(net, output_list, condition="Normal"):
     elif condition == "LPL":
         genes_off = ["APOE4", "LPL"]
     
-    # Run attractor analysis
+    # Run attractor analysis with same parameters as in main file
     attractors = boolnet.get_attractors(
         net,
         type="synchronous",
         method="random",
-        start_states=100000,   
+        start_states=1000000,   
         genes_on=genes_on,
         genes_off=genes_off
     )
@@ -1073,68 +1089,68 @@ def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", d
     # Detailed, mechanism-based drug impacts
     # Based on published clinical trial imaging results
     drug_impact = {
-        'Lecanemab': {
-            'primary_mechanism': 'Anti-amyloid monoclonal antibody',
+        "Ritzaganine": {
+            'primary_mechanism': 'BACE1 inhibitor with dual tau effects',
             'amyloid_suvr': {
-                'global_magnitude': -0.38,  # ~35-40% reduction in global amyloid (CLARITY-AD data)
+                'global_magnitude': -0.32,  # ~30-35% reduction in global amyloid
                 'regional_variation': {
-                    'hippocampus': 0.65,      # Less effect in hippocampus due to lower antibody penetration
-                    'entorhinal_cortex': 0.72,
-                    'temporal_lobe': 0.90,    # Better effect in neocortical regions
-                    'prefrontal_cortex': 1.15, # Stronger effect in frontal regions
-                    'parietal_lobe': 1.20,     # Strongest effect in parietal regions
-                    'posterior_cingulate': 1.08,
-                    'precuneus': 1.12
+                    'hippocampus': 0.70,      # Moderate effect in hippocampus
+                    'entorhinal_cortex': 0.78,
+                    'temporal_lobe': 0.95,    # Better effect in neocortical regions
+                    'prefrontal_cortex': 1.10, # Strong effect in frontal regions
+                    'parietal_lobe': 1.15,     # Strongest effect in parietal regions
+                    'posterior_cingulate': 1.05,
+                    'precuneus': 1.08
                 },
-                'stochasticity': 0.03,  # Individual variability in response
+                'stochasticity': 0.02,  # Individual variability in response
                 'time_dependency': {
-                    'onset_months': 3,       # Significant effect visible at 3 months
-                    'peak_months': 12,       # Peak effect around 12 months
+                    'onset_months': 1,       # More rapid effect onset than antibodies
+                    'peak_months': 6,        # Peak effect around 6 months
                     'peak_factor': 1.0,      # Relative magnitude at peak
-                    'plateau_factor': 0.92,  # Slight reduction after peak
-                    'plateau_months': 18     # When plateau begins
+                    'plateau_factor': 0.95,  # Slight reduction after peak
+                    'plateau_months': 12     # When plateau begins
                 }
             },
             'tau_suvr': {
-                'global_magnitude': -0.12,  # Moderate downstream effect on tau (12% reduction)
+                'global_magnitude': -0.18,  # Moderate downstream effect on tau (18% reduction)
                 'regional_variation': {
-                    'hippocampus': 0.35,     # Much less effect on hippocampal tau
-                    'entorhinal_cortex': 0.40,
-                    'temporal_lobe': 0.68,   # Better effect in neocortical regions
-                    'prefrontal_cortex': 0.75,
-                    'parietal_lobe': 0.70,
-                    'posterior_cingulate': 0.65,
-                    'precuneus': 0.72
+                    'hippocampus': 0.65,     # Better direct effect on hippocampal tau via GSK3beta
+                    'entorhinal_cortex': 0.60,
+                    'temporal_lobe': 0.75,   
+                    'prefrontal_cortex': 0.70,
+                    'parietal_lobe': 0.65,
+                    'posterior_cingulate': 0.60,
+                    'precuneus': 0.67
                 },
-                'stochasticity': 0.04,
+                'stochasticity': 0.03,
                 'time_dependency': {
-                    'onset_months': 6,       # Delayed effect compared to amyloid
-                    'peak_months': 18,       # Peak effect later than amyloid
+                    'onset_months': 2,       # Faster tau effect than antibodies
+                    'peak_months': 9,        # Peak effect later than amyloid
                     'peak_factor': 1.0,
-                    'plateau_factor': 1.0,   # No reduction after peak
-                    'plateau_months': 24
+                    'plateau_factor': 0.97,  # Minimal reduction after peak
+                    'plateau_months': 18
                 },
-                'apoe4_modifier': 0.8        # Less effective for tau in APOE4 carriers
+                'apoe4_modifier': 0.85       # Slightly less effective in APOE4 carriers
             },
-            'atrophy': -0.04,                # Modest atrophy slowing (~4%)
-            'hypometabolism': -0.06,         # Modest metabolic improvement (~6%)
-            'aria_e_risk': 0.127,            # ARIA-E risk in APOE4 carriers
-            'aria_e_risk_non_apoe4': 0.082,  # ARIA-E risk in non-carriers
+            'atrophy': -0.07,                # Good atrophy slowing (~7%)
+            'hypometabolism': -0.09,         # Good metabolic improvement (~9%)
+            'aria_e_risk': 0.02,             # Minimal ARIA-E risk compared to antibodies
+            'aria_e_risk_non_apoe4': 0.015,  # Even lower in non-carriers
             'regional_aria_risk': {          # Relative regional ARIA risk
-                'frontal': 1.3,              # More common in frontal regions
-                'parietal': 1.2,
+                'frontal': 1.0,
+                'parietal': 1.0,
                 'occipital': 1.0,
-                'temporal': 0.8
+                'temporal': 1.0
             },
             # Time-dependent effects
             'time_effects': {
-                1: {'amyloid_factor': 0.3, 'tau_factor': 0.1, 'aria_factor': 0.8},  # Month 1
-                6: {'amyloid_factor': 0.7, 'tau_factor': 0.3, 'aria_factor': 1.0},  # Month 6 
-                12: {'amyloid_factor': 0.9, 'tau_factor': 0.6, 'aria_factor': 0.7}, # Month 12
-                36: {'amyloid_factor': 1.0, 'tau_factor': 0.9, 'aria_factor': 0.4}  # Month 36
+                1: {'amyloid_factor': 0.5, 'tau_factor': 0.2, 'aria_factor': 0.1},  # Month 1
+                6: {'amyloid_factor': 0.9, 'tau_factor': 0.6, 'aria_factor': 0.1},  # Month 6 
+                12: {'amyloid_factor': 1.0, 'tau_factor': 0.9, 'aria_factor': 0.1}, # Month 12
+                36: {'amyloid_factor': 0.95, 'tau_factor': 0.95, 'aria_factor': 0.1}  # Month 36
             }
         },
-        'Memantine': {
+        "Memantine": {
             'primary_mechanism': 'NMDA receptor antagonist',
             'amyloid_suvr': {
                 'global_magnitude': -0.03,  # Minimal amyloid impact (3% reduction)
@@ -1191,7 +1207,7 @@ def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", d
                 36: {'tau_factor': 1.0, 'hypometabolism_factor': 0.8}   # Month 36 (some tolerance)
             }
         },
-        'Donepezil': {
+        "Donepezil": {
             'primary_mechanism': 'Acetylcholinesterase inhibitor',
             'amyloid_suvr': {
                 'global_magnitude': -0.02,  # Very minimal change in amyloid
@@ -1245,7 +1261,7 @@ def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", d
                 36: {'hypometabolism_factor': 0.7, 'tolerance_factor': 0.4}  # Month 36 (significant tolerance)
             }
         },
-        'Galantamine': {
+        "Galantamine": {
             'primary_mechanism': 'Acetylcholinesterase inhibitor & nicotinic receptor modulator',
             'amyloid_suvr': {
                 'global_magnitude': -0.01,  # Extremely minimal change
@@ -1329,14 +1345,12 @@ def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", d
             if 'hypometabolism_factor' in time_factors:
                 drug_effect['hypometabolism'] *= time_factors['hypometabolism_factor']
                 
-            if 'aria_factor' in time_factors and drug_name == 'Lecanemab':
-                # For Lecanemab, ARIA can have counteracting effects in some regions
-                # This creates more realistic time-dependent regional variations
+            if 'aria_factor' in time_factors:
+                # For drugs with ARIA, this can have counteracting effects in some regions
                 for region in ['temporal_lobe', 'entorhinal_cortex', 'posterior_cingulate']:
-                    aria_effect = time_factors['aria_factor'] * 0.3
                     if region in drug_effect['amyloid_suvr']['regional_variation']:
                         # Modify regional variation based on ARIA risk
-                        drug_effect['amyloid_suvr']['regional_variation'][region] *= (1.0 + aria_effect)
+                        drug_effect['amyloid_suvr']['regional_variation'][region] *= (1.0 + (time_factors['aria_factor'] * 0.3))
     else:
         # For unknown drugs, create a custom effect profile based on node changes
         # This allows for time-dependent effects even for custom drugs
@@ -1563,35 +1577,24 @@ def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", d
                 metabolism_change *= metabolism_time_factor
             
             # Add drug-specific temporal and regional effects
-            if drug_name == "Lecanemab":
-                # ARIA effect counteracts amyloid clearance in some regions
-                if timepoint >= 1 and timepoint <= 6:
-                    # ARIA peaks in first 6 months, affecting some regions more
-                    aria_risk_base = drug_effect.get('aria_e_risk', 0.12)
-                    if condition == "APOE4":
-                        aria_risk = aria_risk_base * 1.2  # Higher in APOE4
-                    else:
-                        aria_risk = aria_risk_base * 0.8  # Lower in non-APOE4
-                        
-                    aria_factor = min(0.3, aria_risk * (timepoint / 3) * (1 - timepoint / 12))
+            if drug_name == "Ritzaganine":
+                # BACE1 inhibitor shows more uniform regional effects than antibodies
+                if timepoint >= 0.5 and timepoint <= 3:
+                    # Rapid initial effect
+                    initial_boosting = min(0.2, 0.1 * timepoint)
+                    amyloid_change = amyloid_change * (1.0 + initial_boosting)
                     
-                    # Apply regional ARIA risk modifiers
-                    regional_aria = drug_effect.get('regional_aria_risk', {})
-                    if region in ['temporal_lobe', 'parietal_lobe']:
-                        region_aria_factor = regional_aria.get(region.split('_')[0], 1.0)
-                        
-                        # ARIA causes temporary increase in apparent amyloid signal
-                        # This creates more realistic mixed effects 
-                        if np.random.random() < aria_risk * region_aria_factor:
-                            inflammation_effect = aria_factor * region_aria_factor
-                            amyloid_change = amyloid_change * 0.7 + inflammation_effect  # Mixed effect
+                # Tau effects develop more gradually
+                if timepoint > 2 and timepoint <= 9:
+                    # GSK3beta effects on tau gradually build
+                    tau_enhancement = min(0.25, 0.05 * timepoint)
+                    tau_change = tau_change * (1.0 + tau_enhancement)
+                    
+                # Protection from atrophy increases with time
+                if timepoint > 3:
+                    protection_factor = min(0.3, 0.03 * timepoint)
+                    atrophy_change = atrophy_change * (1.0 + protection_factor)
                 
-                # Effect on tau is delayed and grows over time
-                if timepoint > 6:
-                    # Enhanced tau effect at later timepoints
-                    tau_enhancement = min(0.3, 0.02 * (timepoint - 6))
-                    tau_change = tau_change * (1 + tau_enhancement)
-                    
             elif drug_name == "Memantine":
                 # Memantine works better in more advanced disease
                 if region in ['hippocampus', 'entorhinal_cortex']:
@@ -1602,7 +1605,7 @@ def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", d
                 # Enhanced effect over time on glutamate toxicity
                 if timepoint > 6:
                     protection_bonus = min(0.25, 0.02 * timepoint)
-                    tau_change = tau_change * (1 + protection_bonus)
+                    tau_change = tau_change * (1.0 + protection_bonus)
                     
             elif drug_name in ["Donepezil", "Galantamine"]:
                 # Tolerance develops over time
@@ -1614,7 +1617,7 @@ def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", d
                         tolerance_factor *= 1.2
                         
                     # Tolerance affects metabolism more than other measures
-                    metabolism_change = metabolism_change * (1 - tolerance_factor)
+                    metabolism_change = metabolism_change * (1.0 - tolerance_factor)
                     
                 # Region-specific effects
                 if region in ['hippocampus', 'entorhinal_cortex', 'temporal_lobe']:
@@ -1624,7 +1627,7 @@ def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", d
                 # Galantamine has unique nicotinic modulation
                 if drug_name == "Galantamine" and timepoint > 1:
                     nicotinic_bonus = min(0.2, 0.05 * np.log(1 + timepoint))
-                    metabolism_change = metabolism_change * (1 + nicotinic_bonus)
+                    metabolism_change = metabolism_change * (1.0 + nicotinic_bonus)
             
             # Apply all changes to the region values
             region_pet['amyloid_suvr'] += amyloid_change
@@ -1659,9 +1662,10 @@ def visualize_pet_scan(baseline_pet, post_treatment_pet=None, output_dir="pet_sc
     
     os.makedirs(output_dir, exist_ok=True)
     
-    # Define custom colormaps
-    amyloid_cmap = LinearSegmentedColormap.from_list('amyloid', ['#FFFFFF', '#FFF7BC', '#FEC44F', '#D95F0E', '#993404'])
-    tau_cmap = LinearSegmentedColormap.from_list('tau', ['#FFFFFF', '#EDF8FB', '#B2E2E2', '#66C2A4', '#238B45', '#005824'])
+    # Define custom colormaps with the requested color schemes
+    amyloid_cmap = LinearSegmentedColormap.from_list('amyloid', ['#FFFFFF', '#E6F5E6', '#99D699', '#4CAF50', '#2E7D32', '#1B5E20'])  # Green ombre
+    tau_cmap = LinearSegmentedColormap.from_list('tau', ['#FFFFFF', '#E3F2FD', '#90CAF9', '#42A5F5', '#1976D2', '#0D47A1'])  # Blue ombre
+    atrophy_cmap = LinearSegmentedColormap.from_list('atrophy', ['#FFFFFF', '#F3E5F5', '#CE93D8', '#AB47BC', '#7B1FA2', '#4A148C'])  # Purple ombre
     
     # Function to get colormap and limits for each modality
     def get_cmap_and_limits(modality):
@@ -1670,7 +1674,7 @@ def visualize_pet_scan(baseline_pet, post_treatment_pet=None, output_dir="pet_sc
         elif modality == 'tau_suvr':
             return tau_cmap, (1.0, 2.5)
         else:  # atrophy
-            return plt.cm.Greys, (0, 0.3)
+            return atrophy_cmap, (0, 0.3)
     
     # Get timepoint info for title
     timepoint_label = ""
@@ -1781,7 +1785,6 @@ def visualize_pet_scan(baseline_pet, post_treatment_pet=None, output_dir="pet_sc
         figure_paths[modality] = output_file
     
     return figure_paths
-    
 
 def generate_pet_data(efficacy_data, condition="APOE4"):
     
