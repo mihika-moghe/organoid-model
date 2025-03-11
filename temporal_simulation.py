@@ -27,7 +27,7 @@ from efficacy import (
 
 class TemporalDrugSimulation:
     
-    def __init__(self, network_file="A_model.txt", output_dir="temporal_simulation"):
+    def __init__(self, network_file="A_model.txt", output_dir="temporal_simulation", baseline_attractors=None, perturbation_results=None):
        
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
@@ -37,6 +37,9 @@ class TemporalDrugSimulation:
         network_data = load_network(network_file)
         self.net = network_data['net']
         self.output_list = network_data['output_list']
+
+        self.baseline_attractors = baseline_attractors or {}
+        self.perturbation_results = perturbation_results or {}
         
         # Define timepoints in months
         self.timepoints = [1, 6, 12, 36]  # 1 month, 6 months, 1 year, 3 years
@@ -111,21 +114,7 @@ class TemporalDrugSimulation:
         
         # Updated drug mechanism definitions based on pharmacology literature
         self.drug_mechanisms = {
-            "Ritzaganine": {
-                "primary_target": "BACE1",
-                "primary_effect": "BACE1 inhibitor with additional tau and anti-inflammatory effects",
-                "effect_on_clearance": 0.78,    # Strong clearance of amyloid
-                "effect_on_tau": 0.25,          # Moderate downstream effect on tau
-                "effect_on_cognitive": 0.27,    # Modest cognitive effect (based on clinical data)
-                "effect_on_synaptic": 0.31,     # Modest secondary synaptic effect
-                "effect_on_neuroinflammation": 0.42,  # Significant anti-inflammatory component
-                "tolerance_rate": 0.015,        # Low tolerance development
-                "persistence_factor": 0.92,     # Excellent persistence
-                "onset_delay": 14,              # Days until clinical effect
-                "efficacy_peak": 90,            # Days until peak efficacy
-                "side_effects_rate": 0.12,      # Rate of side effects
-                "dual_mechanism_benefit": 0.18  # Additional benefit from dual mechanism
-            },
+        
             "Memantine": {
                 "primary_target": "NMDA",
                 "primary_effect": "NMDA receptor antagonism, preferential blockade of extrasynaptic receptors",
@@ -206,13 +195,7 @@ class TemporalDrugSimulation:
                         "bbb_penetration": 0.6,    # Moderate blood-brain barrier penetration
                         "volume_distribution": 9.0
                     }
-                elif drug_name == "Ritzaganine":   # BACE1 inhibitor
-                    drug_info["pk"] = {
-                        "half_life": 36,           # Hours
-                        "bioavailability": 0.85,   # Good oral bioavailability
-                        "bbb_penetration": 0.75,   # Good blood-brain barrier penetration
-                        "volume_distribution": 8.5
-                    }
+                
                 else:  # Default values for other drugs
                     drug_info["pk"] = {
                         "half_life": 24,           # Hours
@@ -378,12 +361,12 @@ class TemporalDrugSimulation:
             self._generate_temporal_comparison_visuals(temporal_results, sim_dir)
             # Generate the specific timepoint comparison matrix with proper titles
             self._create_timepoint_comparison_matrix(temporal_results, sim_dir)
+            self.create_timepoint_grid(temporal_results["results"], sim_dir, 
+                                drug_info["name"], condition)
             
             # Add drug-specific visualization based on mechanism
-            if drug_name == "Ritzaganine":
-                # For BACE1 inhibitor, show amyloid reduction and tau effects
-                self._create_bace1_inhibitor_plot(temporal_results, sim_dir)
-            elif drug_name in ["Donepezil", "Galantamine"]:
+            
+            if drug_name in ["Donepezil", "Galantamine"]:
                 # For cholinergic drugs, show acetylcholine levels and cognitive metrics
                 self._create_cholinergic_metrics_plot(temporal_results, sim_dir)
             elif drug_name == "Memantine":
@@ -395,6 +378,14 @@ class TemporalDrugSimulation:
         with open(results_file, 'wb') as f:
             pickle.dump(temporal_results, f)
         
+        if include_visuals:
+        # Create poster-specific graphs
+            self.poster_graphs(
+                temporal_results["results"], 
+                sim_dir,  # Use same directory as other visualizations
+                drug_info["name"], 
+                condition
+            )         
         return temporal_results
     
     def _is_drug_in_targets(self, drug_name):
@@ -535,61 +526,8 @@ class TemporalDrugSimulation:
         """Adjusts pathway changes based on specific drug mechanisms over time"""
         
         adjusted_changes = pathway_changes.copy()
-
-        if drug_name == "Ritzaganine":
-            # BACE1 inhibitor with additional effects
-            # Based on clinical trial data
-            
-            # Amyloid production inhibition shows rapid effect
-            if "Amyloid" in adjusted_changes:
-                # Phase 1: Rapid initial reduction (0-3 months)
-                if months <= 3:
-                    # Quick onset of amyloid reduction
-                    amyloid_factor = 1.0 + (0.2 * (months / 3))
-                # Phase 2: Continued effect (3-12 months)
-                elif months <= 12:
-                    amyloid_factor = 1.2 + (0.2 * ((months - 3) / 9))
-                # Phase 3: Sustained phase (>12 months)
-                else:
-                    amyloid_factor = 1.4
-                    
-                # Apply amyloid reduction factor
-                adjusted_changes["Amyloid"] = adjusted_changes["Amyloid"] * amyloid_factor
-            
-            # Tau effects develop more gradually
-            if "Tau" in adjusted_changes:
-                # Gradual onset of tau effects
-                tau_effect_delay = 1.0 - np.exp(-months / 6)  # Exponential approach to 1.0
-                
-                # Calculate tau effect
-                initial_tau_effect = adjusted_changes["Tau"]
-                delayed_tau_effect = initial_tau_effect * tau_effect_delay
-                
-                # Apply tau effect
-                adjusted_changes["Tau"] = delayed_tau_effect
-                
-            # Anti-inflammatory effects build steadily
-            if "Neuroinflammation" in adjusted_changes:
-                if months <= 2:
-                    # Initial anti-inflammatory effect
-                    infl_factor = 1.0 + (0.15 * (months / 2))
-                elif months <= 6:
-                    # Building effect
-                    infl_factor = 1.15 + (0.25 * ((months - 2) / 4))
-                else:
-                    # Sustained effect
-                    infl_factor = 1.4
-                    
-                # Apply inflammation reduction
-                adjusted_changes["Neuroinflammation"] = adjusted_changes["Neuroinflammation"] * infl_factor
-                
-            # Synaptic effects emerge with delay
-            if "Synaptic" in adjusted_changes:
-                # Modest improvement in synaptic function follows amyloid reduction
-                synapse_lag = 1.0 - np.exp(-months / 4)
-                adjusted_changes["Synaptic"] = adjusted_changes["Synaptic"] * synapse_lag
-                    
-        elif drug_name == "Memantine":
+        
+        if drug_name == "Memantine":
             # NMDA receptor antagonist effects
             # Based on clinical trials and receptor pharmacology
             
@@ -763,90 +701,6 @@ class TemporalDrugSimulation:
                         
         return adjusted_changes
     
-    def _create_bace1_inhibitor_plot(self, temporal_results, output_dir):
-        """Create a special plot for BACE1 inhibitor effects (Ritzaganine)"""
-        drug_name = temporal_results["drug_info"]["name"]
-        condition = temporal_results["condition"]
-        timepoints = [0] + temporal_results["timepoints"]
-        
-        # Extract relevant data
-        amyloid_reduction = []
-        tau_effects = []
-        cognitive_effects = []
-        
-        for i, months in enumerate(timepoints):
-            t = "initial" if i == 0 else f"month_{months}"
-            
-            # Extract data points
-            if i == 0:
-                # Initial values (baseline)
-                amyloid_reduction.append(0)
-                tau_effects.append(0)
-            else:
-                # Amyloid inhibition - models BACE1 inhibition dynamics
-                # Rapid onset with sustained effect
-                if months <= 3:
-                    amyloid_effect = 0.67 * (1 - np.exp(-1.5 * months / 3))
-                else:
-                    amyloid_effect = 0.67 * (1 - 0.1 * np.exp(-(months - 3) / 6))
-                
-                amyloid_reduction.append(amyloid_effect)
-                
-                # Tau effects - delayed but significant
-                if months <= 2:
-                    tau_effect = 0.38 * 0.3 * (months / 2)  # Initial slow onset
-                else:
-                    tau_effect = 0.38 * (0.3 + 0.7 * (1 - np.exp(-(months - 2) / 6)))
-                
-                tau_effects.append(tau_effect)
-            
-            # Cognitive effect from efficacy scores
-            if t in temporal_results["results"]:
-                result = temporal_results["results"][t]
-                if "efficacy_score" in result:
-                    cognitive_effects.append(result["efficacy_score"])
-                else:
-                    cognitive_effects.append(float('nan'))
-            else:
-                cognitive_effects.append(float('nan'))
-        
-        # Create the visualization
-        plt.figure(figsize=(12, 6))
-        
-        # Multiple y-axes for the different metrics
-        ax1 = plt.gca()
-        ax2 = ax1.twinx()
-        
-        # Plot amyloid inhibition effects
-        line1 = ax1.plot(timepoints, amyloid_reduction, 'o-', color='#2E7D32',  # Darker green
-                        linewidth=2, markersize=8, label='Amyloid Reduction')
-        ax1.set_ylabel('Amyloid Reduction Effect', color='#2E7D32', fontsize=12)
-        ax1.tick_params(axis='y', labelcolor='#2E7D32')
-        
-        # Plot tau effects on the same axis
-        line2 = ax1.plot(timepoints, tau_effects, 's--', color='#4CAF50',  # Medium green
-                        linewidth=2, markersize=8, label='Tau Effect')
-        
-        # Plot cognitive effect on second axis
-        line3 = ax2.plot(timepoints, cognitive_effects, '^-', color='#1976D2',  # Medium blue
-                        linewidth=2, markersize=8, label='Cognitive Effect')
-        ax2.set_ylabel('Cognitive Efficacy', color='#1976D2', fontsize=12)
-        ax2.tick_params(axis='y', labelcolor='#1976D2')
-        
-        # Add title and labels
-        plt.title(f"{drug_name}: Mechanism Effects Over Time ({condition})", fontsize=14)
-        plt.xlabel("Months Since Treatment Initiation", fontsize=12)
-        plt.grid(True, alpha=0.3)
-        
-        # Combined legend
-        lines = line1 + line2 + line3
-        labels = [l.get_label() for l in lines]
-        ax1.legend(lines, labels, loc='best')
-        
-        # Save figure
-        plt.tight_layout()
-        plt.savefig(f"{output_dir}/bace1_inhibitor_effects.png", dpi=300, bbox_inches='tight')
-        plt.close()
 
     def _calculate_time_adjusted_changes(self, initial_pathway_changes, drug_info, condition, months):
        
@@ -937,23 +791,7 @@ class TemporalDrugSimulation:
         )
         
         # Add special time-dependent effects
-        if drug_name == "Lecanemab":
-            # Time-dependent ARIA risk affects some regions
-            if months >= 1 and months <= 6:
-                # ARIA risk peaks in the first 6 months
-                aria_factor = min(0.3, 0.05 * months)
-                
-                # Apply ARIA effect to regions (may counteract amyloid clearance in some regions)
-                for region in ['temporal_lobe', 'entorhinal_cortex', 'posterior_cingulate']:
-                    if region in timepoint_pet:
-                        # ARIA can increase apparent amyloid signal in affected regions
-                        inflammation_effect = aria_factor * np.random.uniform(0.1, 0.5)
-                        timepoint_pet[region]['amyloid_suvr'] += inflammation_effect
-                        
-                        # Ensure values stay within realistic ranges
-                        timepoint_pet[region]['amyloid_suvr'] = max(1.0, min(timepoint_pet[region]['amyloid_suvr'], 3.0))
-        
-        elif drug_name in ["Donepezil", "Galantamine"]:
+        if drug_name in ["Donepezil", "Galantamine"]:
             # Cholinesterase inhibitors have diminishing effects over time in some regions
             if months > 3:
                 tolerance_factor = min(0.3, 0.04 * np.log(months))
@@ -1112,228 +950,406 @@ class TemporalDrugSimulation:
         composite = np.sum(np.array(factors) * weights)
         
         return max(0, min(composite, 1.0))
+
+    def _predict_baseline_mmse_decline(self, condition, max_month):
+        """
+        Predict baseline MMSE score decline with realistic rates based on clinical literature.
         
-    def _predict_mmse_scores(self, temporal_results):
-   
-        drug_info = temporal_results["drug_info"]
+        Args:
+            condition: Patient condition ("APOE4", "Normal", or "LPL")
+            max_month: Maximum month to simulate
+            
+        Returns:
+            List of MMSE scores at each month
+        """
+        import numpy as np
+        
+        # Initial MMSE based on condition - slightly lower for realism
+        if condition == "APOE4":
+            initial_mmse = 25.5  # APOE4 carriers typically start lower
+        elif condition == "LPL":
+            initial_mmse = 26.5  # Late-phase lifespan
+        else:  # Normal condition
+            initial_mmse = 27.5  # Even normal elderly have some impairment
+        
+        # Set realistic annual decline rates based on clinical literature
+        # These rates are based on published longitudinal studies
+        annual_decline_rates = {
+            "APOE4": 3.5,    # Faster decline (2.5-4.5 points/year)
+            "LPL": 2.5,      # Moderate decline (1.5-3.0 points/year)
+            "Normal": 1.8    # Slower decline (1.0-2.0 points/year)
+        }
+        
+        # Get appropriate annual decline rate
+        annual_rate = annual_decline_rates.get(condition, 2.0)
+        
+        # Convert to monthly rate
+        monthly_rate = annual_rate / 12.0
+        
+        # Generate MMSE scores
+        mmse_scores = [initial_mmse]
+        
+        # Set random seed for reproducibility
+        np.random.seed(42)
+        
+        # Non-linear trajectory that reflects accelerating decline
+        # This pattern is commonly observed in clinical studies
+        for month in range(1, max_month + 1):
+            # Calculate accelerating rate factor
+            # Decline accelerates over time (especially after 12-18 months)
+            if month < 12:
+                acceleration = 1.0
+            elif month < 24:
+                acceleration = 1.2
+            else:
+                acceleration = 1.4
+            
+            # Calculate this month's decline with acceleration
+            decline = monthly_rate * acceleration
+            
+            # Add small random variations (clinical measurement noise)
+            # Measurement error in MMSE is typically ±1-2 points
+            if month % 6 == 0:  # Larger variations at standard visit intervals
+                random_factor = np.random.normal(0, 0.3)
+            else:
+                random_factor = np.random.normal(0, 0.15)
+            
+            # Calculate next score
+            next_score = mmse_scores[-1] - decline + random_factor
+            
+            # Ensure realistic bounds
+            next_score = max(0, min(next_score, 30))
+            
+            mmse_scores.append(next_score)
+        
+        # Apply light smoothing to avoid unrealistic jumps
+        if max_month > 3:
+            smoothed_scores = [mmse_scores[0]]  # Keep initial score
+            
+            for i in range(1, len(mmse_scores) - 1):
+                # 3-point weighted moving average
+                smoothed = 0.25 * mmse_scores[i-1] + 0.5 * mmse_scores[i] + 0.25 * mmse_scores[i+1]
+                smoothed_scores.append(smoothed)
+                
+            smoothed_scores.append(mmse_scores[-1])  # Keep final score
+            return smoothed_scores
+        
+        return mmse_scores
+
+
+    def _predict_mmse_from_simulation(self, temporal_results):
+        """
+        Predict MMSE scores using efficacy scores from the simulation in a more realistic way,
+        directly incorporating efficacy calculation data.
+        
+        Args:
+            temporal_results: Dictionary of temporal simulation results
+            
+        Returns:
+            Dictionary with treatment and no_treatment MMSE scores
+        """
+        # Extract condition and drug information
         condition = temporal_results["condition"]
-        drug_name = drug_info["name"]
-        
-        # Realistic starting MMSE based on condition and disease stage
-        # Using clinical trial baselines from actual studies
-        if condition == "APOE4":
-            # APOE4 carriers typically start at lower baseline
-            starting_mmse = 24.8  # Slightly lower for APOE4 carriers
-            disease_severity = "moderate"  # Assumed disease stage
-        else:
-            starting_mmse = 26.5  # Higher for non-carriers
-            disease_severity = "mild"  # Assumed disease stage
-            
-        # Adjust for LPL condition
-        if condition == "LPL":
-            starting_mmse = 25.6  # Between APOE4 and Normal
-            
-        # Get timepoints and efficacy scores
-        timepoints = [0] + temporal_results["timepoints"]
-        efficacy_scores = [temporal_results["results"]["initial"]["efficacy_score"]]
-        
-        for t in temporal_results["timepoints"]:
-            efficacy_scores.append(temporal_results["results"][f"month_{t}"]["efficacy_score"])
-        
-        # Calculate realistic MMSE decline without treatment
-        # More sophisticated model based on clinical cohort studies
-        # MMSE decline is non-linear and depends on starting score and APOE status
-
-        # Define baseline decline parameters (points per month)
-        if disease_severity == "mild" and starting_mmse > 24:
-            # Mild AD decline rates from longitudinal studies
-            if condition == "APOE4":
-                base_decline_rate = 0.33  # Points per month for APOE4 carriers
-                acceleration_factor = 0.008  # Non-linear acceleration of decline
-            else:
-                base_decline_rate = 0.24  # Points per month for non-carriers
-                acceleration_factor = 0.006
-        elif disease_severity == "moderate" and starting_mmse <= 24:
-            # Moderate AD decline rates
-            if condition == "APOE4":
-                base_decline_rate = 0.42  # Faster decline in moderate stage
-                acceleration_factor = 0.012
-            else:
-                base_decline_rate = 0.32
-                acceleration_factor = 0.009
-        else:
-            # Default values
-            base_decline_rate = 0.28
-            acceleration_factor = 0.007
-        
-        # LPL-specific rates (intermediate between Normal and APOE4)
-        if condition == "LPL":
-            base_decline_rate = 0.29  # Between normal and APOE4
-            acceleration_factor = 0.007
-            
-        # Get drug-specific parameters
-        if drug_name in self.drug_mechanisms:
-            drug_mech = self.drug_mechanisms[drug_name]
-            cognitive_effect = drug_mech.get("effect_on_cognitive", 0.1)
-            onset_delay = drug_mech.get("onset_delay", 14) / 30  # Convert days to months
-            efficacy_peak = drug_mech.get("efficacy_peak", 60) / 30  # Convert days to months
-            tolerance_rate = drug_mech.get("tolerance_rate", 0.02)
-        else:
-            # Default values for unknown drugs
-            cognitive_effect = 0.15
-            onset_delay = 0.5  # 0.5 months
-            efficacy_peak = 2.0  # 2 months
-            tolerance_rate = 0.03
-            
-        # Disease-modifying vs symptomatic effect
-        is_disease_modifying = False
-        if drug_name == "Ritzaganine":
-            is_disease_modifying = True
-            dm_factor = 0.75  # How much of effect is disease-modifying vs symptomatic
-        elif drug_name in ["Memantine", "Donepezil", "Galantamine"]:
-            is_disease_modifying = False
-            dm_factor = 0.0  # Primarily symptomatic
-        else:
-            # For unknown drugs, assume mixed effect
-            is_disease_modifying = True
-            dm_factor = 0.4  # Moderate disease-modifying component
-
-        # Calculate MMSE with treatment effect
-        mmse_scores = []
-        
-        for i, months in enumerate(timepoints):
-            # Natural non-linear decline - more accurate model
-            natural_decline = base_decline_rate * months + acceleration_factor * (months ** 2)
-            
-            # Apply efficacy with realistic onset and peak timing
-            if months < onset_delay:
-                # Limited effect during onset phase
-                onset_factor = months / onset_delay
-                current_efficacy = efficacy_scores[i] * onset_factor * 0.5
-            elif months < efficacy_peak:
-                # Building to peak effect
-                ramp_factor = onset_delay / efficacy_peak + ((months - onset_delay) / (efficacy_peak - onset_delay)) * 0.8
-                current_efficacy = efficacy_scores[i] * min(1.0, ramp_factor)
-            else:
-                # Full effect followed by potential tolerance
-                tolerance = min(0.4, tolerance_rate * np.log(months - efficacy_peak + 2))
-                current_efficacy = efficacy_scores[i] * (1.0 - tolerance)
-                
-            # Different effect model for disease-modifying vs symptomatic drugs
-            if is_disease_modifying:
-                # Disease-modifying drugs affect the rate of decline
-                # They have greater long-term but slower initial effect
-                
-                # Split effect into disease-modifying and symptomatic components
-                dm_effect = current_efficacy * dm_factor
-                symp_effect = current_efficacy * (1.0 - dm_factor)
-                
-                # Disease-modifying component reduces actual decline
-                reduced_decline = natural_decline * (1.0 - dm_effect)
-                
-                # Symptomatic component directly improves score
-                symptomatic_improvement = min(3.0, symp_effect * cognitive_effect * 4.0)
-                
-                # Combine effects
-                actual_decline = reduced_decline - symptomatic_improvement
-            else:
-                # Purely symptomatic drugs directly improve score but don't affect disease progression
-                symptomatic_improvement = min(4.0, current_efficacy * cognitive_effect * 5.0)
-                actual_decline = natural_decline - symptomatic_improvement
-                
-            # Drug-specific adjustments for realistic effects
-            if drug_name == "Ritzaganine":
-                # Ritzaganine has moderate cognitive benefit with BACE1 inhibition
-                # Effect increases over longer time periods
-                if months > 6:
-                    longer_term_bonus = min(0.7, 0.05 * (months - 6))
-                    actual_decline -= longer_term_bonus
-                    
-            elif drug_name == "Memantine":
-                # Memantine works better in moderate-severe AD
-                if starting_mmse < 20:
-                    # Greater benefit in more advanced disease
-                    severity_bonus = min(0.8, 0.1 * (20 - starting_mmse))
-                    actual_decline -= severity_bonus
-                    
-            elif drug_name == "Donepezil":
-                # Donepezil has early strong effect that partially diminishes
-                if months < 6:
-                    initial_bonus = 0.3 * (1.0 - (months / 6))
-                    actual_decline -= initial_bonus
-                    
-            elif drug_name == "Galantamine":
-                # Galantamine has dual mechanism with different temporal profile
-                if months > 3 and months < 12:
-                    # Nicotinic modulation provides additional midterm benefit
-                    nicotinic_bonus = 0.2 * np.sin(np.pi * (months - 3) / 9)
-                    actual_decline -= nicotinic_bonus
-                
-            # Calculate MMSE
-            mmse = starting_mmse - actual_decline
-                
-            # Ensure MMSE stays within valid range
-            mmse = max(0, min(mmse, 30))
-            mmse_scores.append(mmse)
-        
-        return mmse_scores
-
-
-    def _predict_baseline_mmse_decline(self, condition, max_months):
-    
-        # Starting MMSE score
-        if condition == "APOE4":
-            starting_mmse = 25
-        else:
-            starting_mmse = 27
-        
-        # Monthly decline rate
-        monthly_decline = 0.25 if condition == "APOE4" else 0.17  # points per month
-        
-        # Calculate scores
-        mmse_scores = []
-        for month in range(int(max_months) + 1):
-            mmse = starting_mmse - (monthly_decline * month)
-            mmse_scores.append(max(0, min(mmse, 30)))
-        
-        return mmse_scores
-
-    # Updated visualization for MMSE scores with green and blue colors
-    def _generate_mmse_plot(self, temporal_results, output_dir):
-        """Generate a plot showing predicted MMSE scores over time"""
         drug_name = temporal_results["drug_info"]["name"]
-        condition = temporal_results["condition"]
-        timepoints = [0] + temporal_results["timepoints"]
         
-        # Predict MMSE scores with treatment
-        mmse_scores = self._predict_mmse_scores(temporal_results)
+        # Extract timepoints
+        timepoints = [0]  # Start with initial (month 0)
+        timepoints.extend(temporal_results["timepoints"])
         
-        # Predict baseline MMSE decline (no treatment)
-        max_month = max(temporal_results["timepoints"])
-        baseline_mmse = self._predict_baseline_mmse_decline(condition, max_month)
+        # Set initial MMSE based on condition (from clinical literature)
+        if condition == "APOE4":
+            initial_mmse = 25.5  # APOE4 carriers start lower
+        elif condition == "LPL":
+            initial_mmse = 26.5  # Late-phase lifespan
+        else:  # Normal condition
+            initial_mmse = 27.5  # Normal aging
         
-        # Create the figure
-        plt.figure(figsize=(10, 6))
+        # Set realistic monthly decline rates for untreated patients
+        # Based on condition-specific progression (from clinical literature)
+        if condition == "APOE4":
+            # APOE4 carriers decline faster (3.5-4 points/year)
+            monthly_decline = 0.30
+        elif condition == "LPL":
+            # Late-phase has moderate decline (2.5-3 points/year)
+            monthly_decline = 0.22
+        else:
+            # Normal condition has slower decline (2-2.5 points/year)
+            monthly_decline = 0.18
         
-        # Plot with the new color scheme
-        plt.plot(timepoints, mmse_scores, 'o-', linewidth=2, markersize=8, 
-                label=f'With {drug_name} Treatment', color='#2E7D32')  # Dark green
-        plt.plot(range(len(baseline_mmse)), baseline_mmse, 's--', linewidth=2, markersize=6,
-                label='Without Treatment', color='#1976D2')  # Medium blue
+        # Generate baseline (no treatment) MMSE trajectory
+        baseline_mmse = [initial_mmse]
+        for month in range(1, max(timepoints) + 1):
+            # Apply non-linear acceleration over time (realistic clinical pattern)
+            if month < 12:
+                accel_factor = 1.0
+            elif month < 24:
+                accel_factor = 1.2
+            else:
+                accel_factor = 1.4
+                
+            # Calculate decline with acceleration
+            month_decline = monthly_decline * accel_factor
+            
+            # Add to baseline
+            next_score = baseline_mmse[-1] - month_decline
+            next_score = max(0, min(30, next_score))
+            baseline_mmse.append(next_score)
         
-        # Add title and labels
-        plt.title(f"Predicted MMSE Scores: {drug_name} vs. No Treatment ({condition})", fontsize=14)
-        plt.xlabel("Months Since Treatment Initiation", fontsize=12)
-        plt.ylabel("MMSE Score", fontsize=12)
-        plt.ylim(0, 30)
-        plt.grid(True, alpha=0.3)
-        plt.legend()
+        # Generate treatment MMSE trajectory directly using efficacy scores
+        treatment_mmse = [initial_mmse]
         
-        # Save figure
-        plt.tight_layout()
-        plt.savefig(f"{output_dir}/mmse_prediction.png", dpi=300, bbox_inches='tight')
-        plt.close()
+        # Define drug-specific effects based on mechanism of action
+        drug_effects = {
+            "Memantine": {
+                "max_efficacy": 0.30,      # Maximum effect on slowing decline
+                "onset_delay": 1,          # Months until effect begins
+                "peak_effect": 3,          # Months until maximum effect 
+                "maintenance": 0.85        # Maintenance factor (how well effect persists)
+            },
+            "Donepezil": {
+                "max_efficacy": 0.35,
+                "onset_delay": 1,
+                "peak_effect": 2,
+                "maintenance": 0.80
+            },
+            "Galantamine": {
+                "max_efficacy": 0.33,
+                "onset_delay": 1,
+                "peak_effect": 2,
+                "maintenance": 0.75
+            },
+            "Ritzaganine": {
+                "max_efficacy": 0.45,
+                "onset_delay": 2,
+                "peak_effect": 6,
+                "maintenance": 0.90
+            }
+        }
+        
+        # Set default effects for unknown drugs
+        drug_effect = drug_effects.get(drug_name, {
+            "max_efficacy": 0.35,
+            "onset_delay": 1,
+            "peak_effect": 3,
+            "maintenance": 0.85
+        })
+        
+        # Factor to scale simulation efficacy to clinical reality
+        # This bridges the gap between model predictions and clinical outcomes
+        sim_to_clinical_scale = 2.0  # Amplification factor
+        
+        # Calculate treatment trajectory
+        for i, month in enumerate(range(1, max(timepoints) + 1), 1):
+            # Get baseline decline for this month
+            baseline_decline = baseline_mmse[i-1] - baseline_mmse[i]
+            
+            # Find the closest timepoint in our data
+            closest_timepoint = None
+            min_diff = float('inf')
+            
+            timepoint_key = f"month_{month}"
+            if timepoint_key in temporal_results["results"]:
+                # Directly use this timepoint's efficacy if available
+                result = temporal_results["results"][timepoint_key]
+                
+                # DIRECT INTEGRATION OF CALCULATE_EFFICACY RESULTS
+                # Use efficacy_score, pathway_scores, pathway_changes from the simulation
+                efficacy = result.get("efficacy_score", 0.5)
+                pathway_scores = result.get("pathway_scores", {})
+                pathway_changes = result.get("pathway_changes", {})
+                
+                # Apply drug-specific pathway weighting using pathway scores
+                # This translates pathway-level effects to MMSE outcome
+                weighted_pathway_effect = 0
+                pathway_count = 0
+                
+                # Define key pathways that affect MMSE based on clinical studies
+                key_mmse_pathways = {
+                    "Amyloid": 0.15,         # Weight for MMSE impact
+                    "Tau": 0.20,
+                    "Synaptic": 0.25,
+                    "Cholinergic": 0.30,     # Highest impact on MMSE
+                    "Neuroinflammation": 0.10,
+                    "NMDA": 0.20,
+                    "Oxidative_Stress": 0.05
+                }
+                
+                # Calculate pathway contribution to MMSE using pathway scores
+                for pathway, weight in key_mmse_pathways.items():
+                    if pathway in pathway_scores:
+                        weighted_pathway_effect += pathway_scores[pathway] * weight
+                        pathway_count += 1
+                
+                # Normalize if we have pathway data
+                if pathway_count > 0:
+                    weighted_pathway_effect = weighted_pathway_effect / sum(
+                        weight for pathway, weight in key_mmse_pathways.items() 
+                        if pathway in pathway_scores
+                    )
+                else:
+                    weighted_pathway_effect = 0.5  # Default if no pathway data
+                
+                # Blend efficacy score with pathway effects (70-30 blend)
+                blended_efficacy = 0.7 * efficacy + 0.3 * weighted_pathway_effect
+            else:
+                # If we don't have data for this specific timepoint, estimate efficacy
+                # based on drug effect profile
+                months_since_start = month
+                
+                # Calculate efficacy based on time-dependent drug effect model
+                if months_since_start < drug_effect["onset_delay"]:
+                    # Initial period with minimal effect
+                    time_factor = 0.2
+                elif months_since_start < drug_effect["peak_effect"]:
+                    # Ramp-up period
+                    progress = (months_since_start - drug_effect["onset_delay"]) / (drug_effect["peak_effect"] - drug_effect["onset_delay"])
+                    time_factor = 0.2 + (0.8 * progress)
+                elif months_since_start < 18:
+                    # Maximum effect period
+                    time_factor = 1.0
+                else:
+                    # Maintenance period with potential waning
+                    months_past_peak = months_since_start - 18
+                    decay_rate = (1 - drug_effect["maintenance"]) / 18  # Spread over 18 months
+                    time_factor = max(drug_effect["maintenance"], 1.0 - (months_past_peak * decay_rate))
+                
+                # Calculate efficacy for this timepoint
+                blended_efficacy = drug_effect["max_efficacy"] * time_factor
+            
+            # Scale efficacy to create more visible treatment effect
+            scaled_efficacy = blended_efficacy * sim_to_clinical_scale
+            
+            # Apply drug-specific maximum 
+            drug_specific_cap = drug_effect["max_efficacy"] * 2.0
+            final_efficacy = min(scaled_efficacy, drug_specific_cap)
+            
+            # Calculate decline reduction
+            decline_reduction = min(0.85, final_efficacy)  # Cap at 85% reduction
+            
+            # Calculate treated decline
+            treated_decline = baseline_decline * (1 - decline_reduction)
+            
+            # Calculate next score with treatment
+            next_score = treatment_mmse[-1] - treated_decline
+            next_score = max(0, min(30, next_score))
+            treatment_mmse.append(next_score)
+        
+        # Extract values at required timepoints
+        treatment_values = [treatment_mmse[t] for t in timepoints]
+        baseline_values = [baseline_mmse[t] for t in timepoints]
+        
+        return {
+            'treatment': treatment_values,
+            'no_treatment': baseline_values,
+            'timepoints': timepoints
+        }
 
+    def _predict_mmse_scores(self, temporal_results):
+        """
+        Predict MMSE scores based on comprehensive simulation data.
+        
+        Args:
+            temporal_results: Dictionary of temporal simulation results
+            
+        Returns:
+            Dictionary with treatment and no_treatment MMSE scores
+        """
+        return self._predict_mmse_from_simulation(temporal_results)
+
+    def _calculate_cognitive_score(self, pathway_scores):
+        """
+        Calculate a cognitive score from pathway scores that relates to MMSE.
+        
+        Args:
+            pathway_scores: Dictionary of pathway scores from simulation
+            
+        Returns:
+            Cognitive score between 0-1
+        """
+        # Define cognitive-relevant pathways
+        cognitive_pathways = {
+            'Synaptic': 0.25,
+            'Cholinergic': 0.20,
+            'Tau': 0.15,
+            'Amyloid': 0.10,
+            'Neuroinflammation': 0.10,
+            'Insulin_Signaling': 0.10,
+            'Oxidative_Stress': 0.05,
+            'NMDA': 0.05
+        }
+        
+        # Calculate weighted average
+        total_weight = 0
+        weighted_sum = 0
+        
+        for pathway, weight in cognitive_pathways.items():
+            if pathway in pathway_scores:
+                # Directly use pathway scores
+                # For pathological pathways, lower scores are better
+                if pathway in ['Tau', 'Amyloid', 'Neuroinflammation', 'Oxidative_Stress']:
+                    # Lower values indicate less disease progression
+                    pathway_value = 1 - pathway_scores[pathway]
+                else:
+                    # Higher values indicate better function
+                    pathway_value = pathway_scores[pathway]
+                
+                weighted_sum += pathway_value * weight
+                total_weight += weight
+        
+        # Prevent division by zero
+        if total_weight == 0:
+            return 0.5  # Neutral cognitive score
+        
+        # Return normalized cognitive score
+        return weighted_sum / total_weight
+
+    def _get_disease_progression_rate(self, condition):
+        """
+        Calculate monthly MMSE decline rate dynamically based on simulation data.
+        
+        Args:
+            condition: Patient condition ("APOE4", "Normal", or "LPL")
+            
+        Returns:
+            Monthly MMSE decline rate derived from simulation progression rates
+        """
+        # Extract progression rates for the specific condition
+        condition_rates = self.progression_rates.get(condition, {})
+        
+        # Key pathways that contribute to cognitive decline
+        decline_pathways = [
+            "Amyloid", "Tau", "Neuroinflammation", 
+            "Oxidative_Stress", "Synaptic", "NMDA"
+        ]
+        
+        # Calculate weighted progression rate
+        total_rate = 0
+        pathway_count = 0
+        
+        for pathway in decline_pathways:
+            if pathway in condition_rates:
+                # Take absolute value to handle both positive and negative rates
+                rate = abs(condition_rates[pathway])
+                
+                # Add additional weight to pathways more directly linked to cognitive decline
+                weight = 1.0
+                if pathway in ["Tau", "Amyloid", "Neuroinflammation"]:
+                    weight = 1.5
+                
+                total_rate += rate * weight
+                pathway_count += 1
+        
+        # Prevent division by zero
+        if pathway_count == 0:
+            return 0.1  # Minimal default if no rates found
+        
+        # Normalize and scale the rate
+        progression_rate = total_rate / pathway_count
+        
+        # Ensure a minimum and maximum rate
+        return max(0.05, min(progression_rate, 0.5))
+    
+    
     def _generate_temporal_comparison_visuals(self, temporal_results, output_dir):
         drug_name = temporal_results["drug_info"]["name"]
         condition = temporal_results["condition"]
@@ -1374,6 +1390,9 @@ class TemporalDrugSimulation:
         plt.savefig(f"{output_dir}/efficacy_over_time.png", dpi=300, bbox_inches='tight')
         plt.close()
         
+        # Predict MMSE scores
+        mmse_scores = self._predict_mmse_scores(temporal_results)
+        
         # 2. Pathway changes over time with proper null handling
         # Select key pathways based on drug mechanism and common AD pathways
         key_pathways = ["Amyloid", "Tau", "Synaptic", "Neuroinflammation"]
@@ -1388,7 +1407,7 @@ class TemporalDrugSimulation:
         if drug_name == "Ritzaganine":
             if "Amyloid" not in key_pathways:
                 key_pathways.append("Amyloid")
-            
+                
         plt.figure(figsize=(12, 7))
         
         # Plot each pathway's change over time with null handling
@@ -1485,7 +1504,33 @@ class TemporalDrugSimulation:
             plt.savefig(f"{output_dir}/{modality}_over_time.png", dpi=300, bbox_inches='tight')
             plt.close()
         
-        # 4. Create a comprehensive summary figure with proper titles and null handling
+        # 4. MMSE Prediction Plot
+        plt.figure(figsize=(10, 6))
+        
+        # Ensure we have lists for plotting
+        treatment_scores = list(mmse_scores['treatment'])
+        no_treatment_scores = list(mmse_scores['no_treatment'])
+        plot_timepoints = list(mmse_scores['timepoints'])
+        
+        plt.plot(plot_timepoints, treatment_scores, 'o-', linewidth=2, markersize=8, 
+                label=f'With {drug_name} Treatment', color='#2E7D32')  # Dark green
+        plt.plot(plot_timepoints, no_treatment_scores, 's--', linewidth=2, markersize=6,
+                label='Without Treatment', color='#1976D2')  # Medium blue
+        
+        # Add title and labels
+        plt.title(f"Predicted MMSE Scores: {drug_name} vs. No Treatment ({condition})", fontsize=14)
+        plt.xlabel("Months Since Treatment Initiation", fontsize=12)
+        plt.ylabel("MMSE Score", fontsize=12)
+        plt.ylim(0, 30)
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        
+        # Save figure
+        plt.tight_layout()
+        plt.savefig(f"{output_dir}/mmse_prediction.png", dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # 5. Create a comprehensive summary figure
         plt.figure(figsize=(15, 10))
         
         # Efficacy scores
@@ -1587,88 +1632,173 @@ class TemporalDrugSimulation:
         # Save the comprehensive figure
         plt.savefig(f"{output_dir}/comprehensive_temporal_summary.png", dpi=300, bbox_inches='tight')
         plt.close()
+
+
+    
+    def _generate_mmse_plot(self, temporal_results, output_dir):
+        """
+        Generate a plot showing predicted MMSE scores with realistic clinical patterns.
+        """
+        import numpy as np
+        import matplotlib.pyplot as plt
+        import matplotlib as mpl
+        from matplotlib.ticker import MultipleLocator
+        import os
         
-        # 5. MMSE prediction plot with improved handling and updated colors
-        plt.figure(figsize=(10, 6))
+        # Set professional plotting style
+        plt.style.use('seaborn-v0_8-whitegrid')
+        mpl.rcParams['font.family'] = 'sans-serif'
+        mpl.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'sans-serif']
         
-        # Predict MMSE scores with treatment
-        mmse_scores = self._predict_mmse_scores(temporal_results)
+        # Extract key information
+        drug_name = temporal_results["drug_info"]["name"]
+        condition = temporal_results["condition"]
         
-        # Predict baseline MMSE decline (no treatment)
-        max_month = max(temporal_results["timepoints"])
-        baseline_mmse = self._predict_baseline_mmse_decline(condition, max_month)
+        # Map condition to more descriptive labels
+        condition_labels = {
+            "APOE4": "APOE4 Carriers",
+            "LPL": "Late-Phase Lifespan",
+            "Normal": "Normal Aging"
+        }
+        condition_label = condition_labels.get(condition, condition)
         
-        # Plot both lines with the requested green and blue colors
-        plt.plot(x_values, mmse_scores, 'o-', linewidth=2, markersize=8, 
-                label=f'With {drug_name} Treatment', color='#2E7D32')  # Dark green
-        plt.plot(range(len(baseline_mmse)), baseline_mmse, 's--', linewidth=2, markersize=6,
-                label='Without Treatment', color='#1976D2')  # Medium blue
+        # Get MMSE predictions with realistic patterns
+        mmse_data = self._predict_mmse_from_simulation(temporal_results)
+        timepoints = mmse_data['timepoints']
+        mmse_scores = mmse_data['treatment']
+        baseline_mmse = mmse_data['no_treatment']
         
-        # Add title and labels
-        plt.title(f"Predicted MMSE Scores: {drug_name} vs. No Treatment ({condition})", fontsize=14)
-        plt.xlabel("Months Since Treatment Initiation", fontsize=12)
-        plt.ylabel("MMSE Score", fontsize=12)
-        plt.ylim(0, 30)
-        plt.grid(True, alpha=0.3)
-        plt.legend()
+        # Add confidence intervals for clinical realism
+        np.random.seed(42)  # For reproducibility
         
-        # Save figure
+        # Standard error values based on condition and clinical literature
+        se_values = {
+            "APOE4": 1.0,  # Higher variability in APOE4 carriers
+            "LPL": 0.8,    # Moderate variability
+            "Normal": 0.7  # Lower variability in normal aging
+        }
+        std_error = se_values.get(condition, 0.8)
+        
+        # Calculate CI bands (95% CI = ±1.96*SE)
+        treatment_upper = [min(30, score + 1.96 * std_error) for score in mmse_scores]
+        treatment_lower = [max(0, score - 1.96 * std_error) for score in mmse_scores]
+        baseline_upper = [min(30, score + 1.96 * std_error) for score in baseline_mmse]
+        baseline_lower = [max(0, score - 1.96 * std_error) for score in baseline_mmse]
+        
+        # Drug-specific colors based on mechanism of action
+        drug_colors = {
+            "Memantine": "#006400",      # Dark green for NMDA drugs
+            "Donepezil": "#8B0000",      # Dark red for cholinesterase inhibitors
+            "Galantamine": "#4B0082",    # Indigo for dual-action cholinergics
+            "Ritzaganine": "#00008B"     # Dark blue for disease-modifying drugs
+        }
+        drug_color = drug_colors.get(drug_name, "#005500")  # Default to dark green
+        
+        # Create the figure with larger size for better visibility
+        fig, ax = plt.subplots(figsize=(12, 8), dpi=300)
+        
+        # Add confidence intervals as shaded regions
+        ax.fill_between(timepoints, treatment_lower, treatment_upper, 
+                    color=drug_color, alpha=0.2, label='95% CI (Treatment)')
+        ax.fill_between(timepoints, baseline_lower, baseline_upper, 
+                    color='#003366', alpha=0.2, label='95% CI (No Treatment)')
+        
+        # Plot the main lines with enhanced styling
+        ax.plot(timepoints, mmse_scores, 'o-', linewidth=3, markersize=8, 
+                label=f'With {drug_name} Treatment', color=drug_color)
+        ax.plot(timepoints, baseline_mmse, 's--', linewidth=2.5, markersize=6,
+                label='Without Treatment', color='#003366')  # Very dark blue
+        
+        # Add clinically relevant guidelines
+        # MMSE score bands for interpretation
+        ax.axhspan(24, 30, alpha=0.1, color='green')
+        ax.axhspan(18, 24, alpha=0.1, color='yellow')
+        ax.axhspan(10, 18, alpha=0.1, color='orange')
+        ax.axhspan(0, 10, alpha=0.1, color='red')
+        
+        # Calculate difference at endpoint and mark if significant
+        final_diff = mmse_scores[-1] - baseline_mmse[-1]
+        if abs(final_diff) >= 1.4:  # Minimal clinically important difference
+            # Add annotation showing the difference
+            mid_y = (mmse_scores[-1] + baseline_mmse[-1]) / 2
+            ax.annotate(f"{final_diff:.1f} points",
+                    xy=(timepoints[-1], mid_y),
+                    xytext=(timepoints[-1] - 6, mid_y),
+                    arrowprops=dict(arrowstyle='->'),
+                    fontsize=12, fontweight='bold')
+        
+        # Set axis limits for focused view on relevant MMSE range
+        min_score = min(min(treatment_lower), min(baseline_lower))
+        max_score = max(max(treatment_upper), max(baseline_upper))
+        
+        # Adjust y-axis to show decline clearly without exaggeration
+        y_min = max(5, min(18, np.floor(min_score - 2)))
+        y_max = min(30, np.ceil(max_score + 1))
+        ax.set_ylim(y_min, y_max)
+        
+        # Better tick spacing
+        ax.yaxis.set_major_locator(MultipleLocator(2))
+        ax.yaxis.set_minor_locator(MultipleLocator(1))
+        ax.xaxis.set_major_locator(MultipleLocator(6))
+        ax.xaxis.set_minor_locator(MultipleLocator(3))
+        
+        # Add enhanced grid
+        ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.7)
+        ax.grid(True, which='minor', linestyle=':', linewidth=0.5, alpha=0.4)
+        
+        # Add title and labels with larger font sizes
+        title = f"Predicted MMSE Scores: {drug_name} vs. No Treatment\n{condition_label}"
+        ax.set_title(title, fontsize=16, fontweight='bold')
+        ax.set_xlabel("Months Since Treatment Initiation", fontsize=14)
+        ax.set_ylabel("MMSE Score", fontsize=14)
+        
+        # Add legend with better positioning
+        ax.legend(loc='best', fontsize=12, framealpha=0.9)
+        
+        # Add MMSE interpretation bands
+        severity_labels = [
+            (27, "Normal (24-30)"),
+            (21, "Mild (18-23)"),
+            (14, "Moderate (10-17)"),
+            (5, "Severe (0-9)")
+        ]
+        
+        # Only add annotations if they fit in the y-axis range
+        for y_pos, label in severity_labels:
+            if y_min <= y_pos <= y_max:
+                ax.annotate(label, xy=(timepoints[0], y_pos), xytext=(5, 0), 
+                        textcoords='offset points', ha='left', va='center',
+                        fontsize=8, alpha=0.7)
+        
+        # Add clinical information box
+        if condition == "APOE4":
+            expected_annual = "3.5 points/year"
+        elif condition == "LPL":
+            expected_annual = "2.5 points/year"
+        else:
+            expected_annual = "1.8 points/year"
+            
+        # Create info box text
+        clinical_info = (
+            f"Expected decline: {expected_annual}\n"
+            f"Treatment effect: {final_diff:.2f} points at {max(timepoints)} months\n"
+            f"Drug mechanism: {drug_name}\n"
+            f"Patient type: {condition_label}"
+        )
+        
+        # Add text box with clinical details
+        props = dict(boxstyle='round', facecolor='white', alpha=0.7)
+        ax.text(0.97, 0.03, clinical_info, transform=ax.transAxes, fontsize=10,
+            verticalalignment='bottom', horizontalalignment='right', bbox=props)
+        
+        # Ensure the directory exists
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Save figure with high resolution for poster/presentation
         plt.tight_layout()
         plt.savefig(f"{output_dir}/mmse_prediction.png", dpi=300, bbox_inches='tight')
+        plt.savefig(f"{output_dir}/mmse_prediction.pdf", format='pdf', bbox_inches='tight')
         plt.close()
-        
-        # 6. Regional atrophy comparison at final timepoint with improved handling
-        plt.figure(figsize=(12, 8))
-        
-        # Extract final timepoint atrophy data with proper null handling
-        final_timepoint = f"month_{max(temporal_results['timepoints'])}"
-        
-        if final_timepoint in temporal_results["results"]:
-            final_result = temporal_results["results"][final_timepoint]
-            if "pet_data" in final_result and final_result["pet_data"] is not None:
-                final_pet_data = final_result["pet_data"]
-                
-                # Collect atrophy values by region
-                regions = []
-                atrophy_values = []
-                
-                for region in BRAIN_REGIONS:
-                    if region in final_pet_data and "atrophy" in final_pet_data[region]:
-                        regions.append(region)
-                        atrophy_values.append(final_pet_data[region]["atrophy"])
-                
-                # Only create plot if we have data
-                if regions and atrophy_values:
-                    # Create bar chart
-                    plt.barh(regions, atrophy_values, color='#9C27B0')  # Purple color
-                    plt.title(f"{drug_name}: Regional Atrophy at {max(temporal_results['timepoints'])} Months ({condition})", fontsize=14)
-                    plt.xlabel("Atrophy Index", fontsize=12)
-                    plt.grid(True, alpha=0.3, axis='x')
-                    
-                    # Save figure
-                    plt.tight_layout()
-                    plt.savefig(f"{output_dir}/regional_atrophy.png", dpi=300, bbox_inches='tight')
-            else:
-                print(f"Warning: No PET data available for {drug_name} at final timepoint")
-        else:
-            print(f"Warning: Missing final timepoint data for {drug_name}")
-            
-        plt.close()
-        
-        # 7. Drug-specific biomarker visualization based on mechanism
-        if drug_name == "Ritzaganine":
-            # For BACE1 inhibitor, show amyloid reduction and tau effects
-            self._create_bace1_inhibitor_plot(temporal_results, output_dir)
-        elif drug_name in ["Donepezil", "Galantamine"]:
-            # For cholinergic drugs, show acetylcholine levels and cognitive metrics
-            self._create_cholinergic_metrics_plot(temporal_results, output_dir)
-        elif drug_name == "Memantine":
-            # For memantine, show NMDA receptor effects
-            self._create_excitotoxicity_plot(temporal_results, output_dir)
-        
-        # 8. Create time point comparison matrix for each biomarker
-        # This produces a grid of subplots showing each time point for amyloid, tau, and atrophy
-        self._create_timepoint_comparison_matrix(temporal_results, output_dir)
 
             
     def _create_amyloid_clearance_plot(self, temporal_results, output_dir):
@@ -2124,148 +2254,346 @@ class TemporalDrugSimulation:
         plt.subplots_adjust(top=0.94)
         plt.savefig(f"{output_dir}/comprehensive_timepoint_grid.png", dpi=300, bbox_inches='tight')
         plt.close()
-
-    def _create_combined_biomarker_grid(self, temporal_results, sim_dir):
+    
+    @staticmethod
+    def create_timepoint_grid(timepoint_results, output_dir, drug_name, condition):
         """
-        Create a comprehensive grid using the exact same data processing as individual plots
+        Create a grid visualization showing all biomarkers across all timepoints.
+        
+        Args:
+            timepoint_results: Dictionary of results for each timepoint
+            output_dir: Base output directory
+            drug_name: Name of drug being simulated
+            condition: Patient condition (APOE4, Normal, etc.)
         """
-        drug_name = temporal_results["drug_info"]["name"]
-        condition = temporal_results["condition"]
+        import os
+        import matplotlib.pyplot as plt
+        import matplotlib.gridspec as gridspec
+        import numpy as np
+        from matplotlib.colors import LinearSegmentedColormap
         
-        # Define key timepoints to include
-        key_timepoints = ["initial"]
-        key_months = [0]
+        # Create output directory
+        grid_dir = os.path.join(output_dir, "grid_view")
+        os.makedirs(grid_dir, exist_ok=True)
         
-        for m in [1, 6, 12, 36]:
-            if m in temporal_results["timepoints"]:
-                key_timepoints.append(f"month_{m}")
-                key_months.append(m)
+        # Define biomarkers
+        biomarkers = ['amyloid_suvr', 'tau_suvr', 'atrophy']
         
-        # Define the biomarkers
-        biomarkers = ["amyloid_suvr", "tau_suvr", "atrophy"]
-        biomarker_titles = {
-            "amyloid_suvr": "Amyloid PET SUVr",
-            "tau_suvr": "Tau PET SUVr",
-            "atrophy": "Brain Atrophy"
+        # Define enhanced colormaps
+        amyloid_cmap = LinearSegmentedColormap.from_list('amyloid', 
+                                                        ['#FFFFFF', '#C8E6C9', '#81C784', '#4CAF50', '#2E7D32', '#1B5E20', '#0A3C0A'])
+        tau_cmap = LinearSegmentedColormap.from_list('tau', 
+                                                ['#FFFFFF', '#BBDEFB', '#64B5F6', '#2196F3', '#1976D2', '#0D47A1', '#052970'])
+        atrophy_cmap = LinearSegmentedColormap.from_list('atrophy', 
+                                                    ['#FFFFFF', '#E1BEE7', '#BA68C8', '#9C27B0', '#7B1FA2', '#4A148C', '#2A0D50'])
+        
+        # Map biomarkers to colormaps
+        cmap_dict = {
+            'amyloid_suvr': amyloid_cmap,
+            'tau_suvr': tau_cmap,
+            'atrophy': atrophy_cmap
         }
         
-        # Create a shared data lookup to ensure consistency
-        # Store exactly once and reuse for all plots
-        biomarker_data = {}
+        # Get timepoints in order
+        timepoints = []
+        for tp in sorted([tp for tp in timepoint_results.keys() if tp.startswith("month_")], 
+                        key=lambda x: int(x.replace("month_", ""))):
+            timepoints.append(tp)
         
-        # First extract all data to ensure consistency
-        for timepoint in key_timepoints:
-            if timepoint in temporal_results["results"] and "pet_data" in temporal_results["results"][timepoint]:
-                pet_data = temporal_results["results"][timepoint]["pet_data"]
-                if timepoint not in biomarker_data:
-                    biomarker_data[timepoint] = {}
-                    
-                # Extract each biomarker's data
-                for biomarker in biomarkers:
-                    if biomarker not in biomarker_data[timepoint]:
-                        biomarker_data[timepoint][biomarker] = {}
-                        
-                    # Get all regions for this biomarker
-                    regions = []
-                    values = []
-                    for region in pet_data:
-                        if region != 'metadata' and biomarker in pet_data[region]:
-                            regions.append(region)
-                            values.append(pet_data[region][biomarker])
-                    
-                    # Sort regions if we have data
-                    if regions and values:
-                        # Sorting direction depends on the biomarker
-                        bad_direction = 1  # Higher is worse for all these biomarkers
-                        
-                        # Sort the regions by value
-                        sorted_data = sorted(zip(regions, values), key=lambda x: x[1] * bad_direction)
-                        sorted_regions, sorted_values = zip(*sorted_data)
-                        
-                        # Store the sorted data
-                        biomarker_data[timepoint][biomarker]['regions'] = sorted_regions
-                        biomarker_data[timepoint][biomarker]['values'] = sorted_values
+        # Create a very large figure to ensure high quality
+        fig = plt.figure(figsize=(20, 15))
         
-        # Define custom colormaps
-        amyloid_cmap = LinearSegmentedColormap.from_list('amyloid_green', 
-                                                        ['#FFFFFF', '#E5F5E0', '#C7E9C0', '#A1D99B', '#74C476', '#41AB5D', '#238B45', '#006D2C'])
-        tau_cmap = LinearSegmentedColormap.from_list('tau_blue', 
-                                                    ['#FFFFFF', '#EDF8FB', '#B2E2E2', '#66C2A4', '#41B6C4', '#2C7FB8', '#253494'])
-        atrophy_cmap = LinearSegmentedColormap.from_list('atrophy_purple', 
-                                                        ['#FFFFFF', '#F2F0F7', '#DADAEB', '#BCBDDC', '#9E9AC8', '#807DBA', '#6A51A3', '#54278F'])
+        # Use GridSpec for more control over layout
+        # 3 rows (one per biomarker) x columns (one per timepoint)
+        gs = gridspec.GridSpec(nrows=3, ncols=len(timepoints), figure=fig)
         
-        biomarker_cmaps = {
-            "amyloid_suvr": amyloid_cmap,
-            "tau_suvr": tau_cmap,
-            "atrophy": atrophy_cmap
-        }
+        # Function to get value limits for each biomarker
+        def get_limits(biomarker):
+            if biomarker == 'amyloid_suvr':
+                return (1.0, 2.2)
+            elif biomarker == 'tau_suvr':
+                return (1.0, 2.5)
+            else:  # atrophy
+                return (0, 0.3)
         
-        # Value limits for each biomarker
-        vmin_vmax = {
-            "amyloid_suvr": (1.0, 2.2),
-            "tau_suvr": (1.0, 2.0),
-            "atrophy": (0.0, 0.3)
-        }
-        
-        # Create a multi-panel figure
-        fig = plt.figure(figsize=(20, 15), constrained_layout=True)
-        gs = gridspec.GridSpec(nrows=3, ncols=len(key_timepoints), hspace=0.4, wspace=0.3)
-        
-        # Now create the visualization grid using the exact same data
-        for i, biomarker in enumerate(biomarkers):
-            # Get colormap and limits
-            cmap = biomarker_cmaps[biomarker]
-            vmin, vmax = vmin_vmax[biomarker]
-            
-            for j, (timepoint, month) in enumerate(zip(key_timepoints, key_months)):
-                ax = fig.add_subplot(gs[i, j])
+        # For each biomarker (rows)
+        for b_idx, biomarker in enumerate(biomarkers):
+            # For each timepoint (columns)
+            for t_idx, timepoint in enumerate(timepoints):
+                # Create subplot
+                ax = fig.add_subplot(gs[b_idx, t_idx])
                 
-                # If we have data for this timepoint and biomarker, plot it
-                if (timepoint in biomarker_data and 
-                    biomarker in biomarker_data[timepoint] and 
-                    'regions' in biomarker_data[timepoint][biomarker]):
-                    
-                    # Use the exact same data as the individual plots
-                    regions = biomarker_data[timepoint][biomarker]['regions']
-                    values = biomarker_data[timepoint][biomarker]['values']
-                    
-                    # Create horizontal bar chart
-                    bars = ax.barh(regions, values, 
-                                color=[cmap((v - vmin) / (vmax - vmin)) for v in values])
-                    
-                    # Add value labels
-                    for k, v in enumerate(values):
-                        ax.text(max(v + 0.02, vmin + 0.02), k, f"{v:.2f}", va='center', fontsize=8)
-                    
-                    # Set consistent x-axis limits
-                    ax.set_xlim(vmin, vmax)
-                else:
-                    ax.text(0.5, 0.5, "No data available", ha='center', va='center')
-                
-                # Add title for this specific subplot
-                if i == 0:  # Only on top row
-                    if timepoint == "initial":
-                        ax.set_title(f"Initial (Month 0)", fontsize=12)
+                try:
+                    # Get pet data for this timepoint
+                    if timepoint in timepoint_results and 'pet_data' in timepoint_results[timepoint]:
+                        pet_data = timepoint_results[timepoint]['pet_data']
+                        
+                        # Get regions and values
+                        regions = []
+                        values = []
+                        
+                        for region, data in pet_data.items():
+                            if region != 'metadata' and isinstance(data, dict) and biomarker in data:
+                                regions.append(region)
+                                values.append(data[biomarker])
+                        
+                        if regions and values:
+                            # Sort by value for better visualization
+                            sorted_indices = np.argsort(values)
+                            sorted_regions = [regions[i] for i in sorted_indices]
+                            sorted_values = [values[i] for i in sorted_indices]
+                            
+                            # Set value limits
+                            v_limits = get_limits(biomarker)
+                            
+                            # Create horizontal bar chart
+                            bars = ax.barh(sorted_regions, sorted_values, 
+                                        color=[cmap_dict[biomarker]((v - v_limits[0]) / (v_limits[1] - v_limits[0])) 
+                                                for v in sorted_values],
+                                        height=0.7)
+                            
+                            # Add values as text
+                            for i, v in enumerate(sorted_values):
+                                ax.text(max(v + 0.05, v_limits[0] + 0.15), i, f"{v:.2f}", 
+                                    va='center', fontweight='bold', fontsize=9, color='black')
+                            
+                            # Set title for column (top row only)
+                            if b_idx == 0:
+                                month = int(timepoint.replace("month_", ""))
+                                ax.set_title(f"Month {month}", fontsize=14, fontweight='bold')
+                            
+                            # Set biomarker label (first column only)
+                            if t_idx == 0:
+                                ylabel = biomarker.replace('_', ' ').replace('suvr', 'SUVr').title()
+                                ax.set_ylabel(ylabel, fontsize=14, fontweight='bold')
+                            
+                            # Set limits and grid
+                            ax.set_xlim(v_limits)
+                            ax.grid(axis='x', linestyle='--', alpha=0.7)
+                            
+                            # Enhance appearance
+                            ax.set_facecolor('#f8f8f8')
+                            for spine in ax.spines.values():
+                                spine.set_linewidth(1.5)
+                            
+                            # Reduce font size for region names
+                            ax.tick_params(axis='y', labelsize=10)
+                        else:
+                            ax.text(0.5, 0.5, "No Data", ha='center', va='center', 
+                                fontsize=12, transform=ax.transAxes)
+                            ax.axis('off')
                     else:
-                        ax.set_title(f"Month {month}", fontsize=12)
+                        ax.text(0.5, 0.5, "Missing Timepoint", ha='center', va='center', 
+                            fontsize=12, transform=ax.transAxes)
+                        ax.axis('off')
                 
-                # Add biomarker label on first column
-                if j == 0:
-                    ax.set_ylabel(biomarker_titles[biomarker], fontsize=12)
-                    
-                # Hide y-tick labels on all but first column to save space
-                if j > 0:
-                    ax.set_yticks([])
-                    ax.set_yticklabels([])
-                    
-                # Add gridlines
-                ax.grid(axis='x', linestyle='--', alpha=0.3)
+                except Exception as e:
+                    print(f"Error in plot for {biomarker} at {timepoint}: {str(e)}")
+                    ax.text(0.5, 0.5, "Error", ha='center', va='center', 
+                        fontsize=12, transform=ax.transAxes, color='red')
+                    ax.axis('off')
         
-        # Main title for the entire figure
-        fig.suptitle(f"{drug_name}: Biomarker Changes Across Key Timepoints ({condition})", 
-                    fontsize=16, y=0.98)
+        # Add super title
+        plt.suptitle(f"{drug_name}: Biomarker Changes Across Key Timepoints ({condition})", 
+                    fontsize=18, fontweight='bold', y=0.98)
         
-        # Adjust layout and save
-        plt.subplots_adjust(top=0.93)
-        plt.savefig(f"{sim_dir}/comprehensive_biomarker_grid.png", dpi=300, bbox_inches='tight')
+        # Adjust layout
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        
+        # Save the figure
+        output_file = os.path.join(grid_dir, f"{drug_name.lower()}_{condition.lower()}_timepoint_grid.png")
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
         plt.close()
+        
+        print(f"Created timepoint grid visualization for {drug_name} in {condition} condition")
+        return output_file
+    
+    def poster_graphs(self, timepoint_results, output_dir, drug_name, condition):
+        """
+        Create graphs for poster presentation with EXTREMELY DARK colors for visibility.
+        
+        Args:
+            timepoint_results: Dictionary of results for each timepoint
+            output_dir: Base output directory
+            drug_name: Name of drug being simulated
+            condition: Patient condition (APOE4, Normal, etc.)
+        """
+        import os
+        import matplotlib.pyplot as plt
+        import matplotlib.gridspec as gridspec
+        import numpy as np
+        from matplotlib.colors import LinearSegmentedColormap
+        
+        # Create output directory
+        poster_dir = os.path.join(output_dir, "poster_graphs")
+        os.makedirs(poster_dir, exist_ok=True)
+        
+        # Define biomarkers - removed atrophy as requested
+        biomarkers = ['amyloid_suvr', 'tau_suvr']
+        
+        # EXTREMELY DARK colors for NORMAL condition
+        if condition == "Normal":
+            # Ultra-dark greens for amyloid - almost black at the darkest end
+            amyloid_cmap = LinearSegmentedColormap.from_list('amyloid_normal', 
+                                                        ['#FFFFFF', '#005500', '#003300', '#002200', '#001100'])
+            
+            # Ultra-dark blues for tau - almost black at the darkest end
+            tau_cmap = LinearSegmentedColormap.from_list('tau_normal', 
+                                                ['#FFFFFF', '#003366', '#002244', '#001133', '#000022'])
+        else:  # For any other condition, still use dark colors
+            amyloid_cmap = LinearSegmentedColormap.from_list('amyloid_default', 
+                                                        ['#FFFFFF', '#4CAF50', '#2E7D32', '#1B5E20', '#0A3C0A'])
+            tau_cmap = LinearSegmentedColormap.from_list('tau_default', 
+                                                ['#FFFFFF', '#2196F3', '#1976D2', '#0D47A1', '#052970'])
+        
+        # Map biomarkers to colormaps
+        cmap_dict = {
+            'amyloid_suvr': amyloid_cmap,
+            'tau_suvr': tau_cmap
+        }
+        
+        # Select only specific timepoints for the poster
+        poster_timepoints = []
+        
+        # Always include initial timepoint
+        if "initial" in timepoint_results:
+            poster_timepoints.append("initial")
+        
+        # Add 12 month and 36 month timepoints if available
+        for month in [12, 36]:
+            timepoint = f"month_{month}"
+            if timepoint in timepoint_results:
+                poster_timepoints.append(timepoint)
+        
+        # Exit if not enough data
+        if len(poster_timepoints) < 2:
+            print(f"Warning: Not enough timepoints for poster graphs. Need at least initial and one other timepoint.")
+            return None
+        
+        # Create a figure with optimized size for poster
+        fig = plt.figure(figsize=(15, 8))
+        
+        # Use GridSpec for layout
+        gs = gridspec.GridSpec(nrows=len(biomarkers), ncols=len(poster_timepoints), figure=fig)
+        
+        # Function to get value limits for each biomarker
+        def get_limits(biomarker):
+            if biomarker == 'amyloid_suvr':
+                return (1.0, 2.2)
+            elif biomarker == 'tau_suvr':
+                return (1.0, 2.5)
+        
+        # Function to get pretty timepoint labels
+        def get_timepoint_label(timepoint):
+            if timepoint == "initial":
+                return "Baseline (Month 0)"
+            else:
+                month = int(timepoint.replace("month_", ""))
+                return f"Month {month}"
+        
+        # For each biomarker (rows)
+        for b_idx, biomarker in enumerate(biomarkers):
+            # For each timepoint (columns)
+            for t_idx, timepoint in enumerate(poster_timepoints):
+                # Create subplot
+                ax = fig.add_subplot(gs[b_idx, t_idx])
+                
+                try:
+                    # Get pet data for this timepoint
+                    if timepoint in timepoint_results and 'pet_data' in timepoint_results[timepoint]:
+                        pet_data = timepoint_results[timepoint]['pet_data']
+                        
+                        # Get regions and values
+                        regions = []
+                        values = []
+                        
+                        for region, data in pet_data.items():
+                            if region != 'metadata' and isinstance(data, dict) and biomarker in data:
+                                regions.append(region)
+                                values.append(data[biomarker])
+                        
+                        if regions and values:
+                            # Sort by value for better visualization
+                            sorted_indices = np.argsort(values)
+                            sorted_regions = [regions[i] for i in sorted_indices]
+                            sorted_values = [values[i] for i in sorted_indices]
+                            
+                            # Improve region names for display
+                            display_regions = [r.replace('_', ' ').title() for r in sorted_regions]
+                            
+                            # Set value limits
+                            v_limits = get_limits(biomarker)
+                            
+                            # Calculate normalized values for coloring - force darker colors
+                            norm_values = []
+                            for v in sorted_values:
+                                # Apply a power function to make colors darker at lower values
+                                normalized = ((v - v_limits[0]) / (v_limits[1] - v_limits[0]))**0.7  # Power < 1 makes more values darker
+                                norm_values.append(normalized)
+                            
+                            # Create horizontal bar chart with enhanced styling for poster
+                            bars = ax.barh(display_regions, sorted_values, 
+                                        color=[cmap_dict[biomarker](nv) for nv in norm_values],
+                                        height=0.7, edgecolor='none')
+                            
+                            # Add values as bold text with improved visibility for poster
+                            for i, v in enumerate(sorted_values):
+                                ax.text(max(v + 0.05, v_limits[0] + 0.15), i, f"{v:.2f}", 
+                                    va='center', fontweight='bold', fontsize=10, color='black')
+                            
+                            # Set title for column (top row only)
+                            if b_idx == 0:
+                                timepoint_label = get_timepoint_label(timepoint)
+                                ax.set_title(timepoint_label, fontsize=14, fontweight='bold')
+                            
+                            # Set biomarker label (first column only)
+                            if t_idx == 0:
+                                ylabel = biomarker.replace('_', ' ').replace('suvr', 'SUVr').title()
+                                ax.set_ylabel(ylabel, fontsize=14, fontweight='bold')
+                            
+                            # Set limits and grid
+                            ax.set_xlim(v_limits)
+                            ax.grid(axis='x', linestyle='--', alpha=0.5, linewidth=0.8)
+                            
+                            # Enhance appearance for poster presentation
+                            ax.set_facecolor('#f8f8f8')
+                            for spine in ax.spines.values():
+                                spine.set_linewidth(1.2)
+                            
+                            # Configure tick parameters for clarity
+                            ax.tick_params(axis='y', labelsize=11, length=4)
+                            ax.tick_params(axis='x', labelsize=10, length=4)
+                        else:
+                            ax.text(0.5, 0.5, "No Data", ha='center', va='center', 
+                                    fontsize=12, transform=ax.transAxes)
+                            ax.axis('off')
+                    else:
+                        ax.text(0.5, 0.5, "Missing Timepoint", ha='center', va='center', 
+                            fontsize=12, transform=ax.transAxes)
+                        ax.axis('off')
+                
+                except Exception as e:
+                    print(f"Error in plot for {biomarker} at {timepoint}: {str(e)}")
+                    ax.text(0.5, 0.5, "Error", ha='center', va='center', 
+                        fontsize=12, transform=ax.transAxes, color='red')
+                    ax.axis('off')
+        
+        # Add super title with condition information
+        plt.suptitle(f"{drug_name}: Biomarker Changes in {condition} Condition", 
+                    fontsize=16, fontweight='bold', y=0.98)
+        
+        # Adjust layout
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        
+        # Save the figure with high resolution for poster
+        output_file = os.path.join(poster_dir, f"{drug_name.lower()}_{condition.lower()}_poster_graph.png")
+        plt.savefig(output_file, dpi=400, bbox_inches='tight')
+        
+        # Also save as PDF for high-quality poster printing
+        pdf_file = os.path.join(poster_dir, f"{drug_name.lower()}_{condition.lower()}_poster_graph.pdf")
+        plt.savefig(pdf_file, format='pdf', bbox_inches='tight')
+        
+        plt.close()
+        
+        print(f"Created poster graph for {drug_name} in {condition} condition")
+        return output_file

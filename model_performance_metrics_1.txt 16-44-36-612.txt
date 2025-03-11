@@ -1,0 +1,74 @@
+================================================================================
+RANDOM FOREST REGRESSOR PERFORMANCE METRICS
+================================================================================
+
+Evaluation Date: 2025-03-10 15:05:43
+
+1. VALIDATION METRICS:
+--------------------------------------------------
+R² Score: 0.4934
+Pearson Correlation Coefficient (r): 0.8995
+Mean Absolute Error (MAE): 0.0585
+Root Mean Squared Error (RMSE): 0.0663
+Mean Squared Error (MSE): 0.0044
+
+2. FULL DATASET METRICS:
+--------------------------------------------------
+R² Score: 0.4498
+Pearson Correlation Coefficient (r): 0.7340
+Mean Absolute Error (MAE): 0.0557
+Root Mean Squared Error (RMSE): 0.0631
+Mean Squared Error (MSE): 0.0040
+
+3. CROSS-VALIDATION METRICS:
+--------------------------------------------------
+Mean R² Score: 0.0335
+Mean Correlation Coefficient (r): N/A (not calculated in cross-validation)
+Mean Absolute Error (MAE): 0.0644
+Root Mean Squared Error (RMSE): 0.0719
+Mean Squared Error (MSE): 0.0052
+
+4. TOP FEATURE IMPORTANCE:
+--------------------------------------------------
+1. Feature_10: 0.2610
+2. Feature_35: 0.2139
+3. Feature_77: 0.1720
+4. Feature_78: 0.0849
+5. Feature_79: 0.0802
+6. Feature_63: 0.0696
+7. Feature_30: 0.0608
+8. Feature_14: 0.0290
+9. Feature_47: 0.0286
+10. Feature_0: 0.0000
+
+================================================================================
+INTERPRETATION GUIDE:
+--------------------------------------------------
+
+R² Score (Coefficient of Determination):
+  - Measures how well the model explains the variance in the data
+  - Range: 0 to 1, where 1 is perfect prediction
+  - Values > 0.7 generally indicate good model performance
+
+Pearson Correlation Coefficient (r):
+  - Measures the linear correlation between actual and predicted values
+  - Range: -1 to 1, where 1 is perfect positive correlation
+  - Values > 0.8 indicate strong correlation
+
+Mean Absolute Error (MAE):
+  - Average absolute difference between actual and predicted values
+  - Lower values are better
+  - In the same units as the target variable
+
+Root Mean Squared Error (RMSE):
+  - Square root of the average squared differences
+  - More sensitive to outliers than MAE
+  - Lower values are better
+  - In the same units as the target variable
+
+Mean Squared Error (MSE):
+  - Average of squared differences
+  - Lower values are better
+  - Units are squared, making interpretation less intuitive than RMSE
+
+================================================================================

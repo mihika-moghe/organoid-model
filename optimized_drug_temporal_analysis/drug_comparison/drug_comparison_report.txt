@@ -1,0 +1,156 @@
+================================================================================
+ALZHEIMER'S DISEASE DRUG COMPARISON REPORT
+================================================================================
+
+This report compares the efficacy of Memantine, Donepezil, and Galantamine
+across different conditions and timepoints using the optimized model.
+
+--------------------------------------------------------------------------------
+CONDITION: APOE4
+--------------------------------------------------------------------------------
+
+Efficacy Comparison:
+-------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      0.3500    0.0906    0.0743    0.0563    0.0118    
+Donepezil      0.4500    0.1074    0.0819    0.0531    0.0191    
+Galantamine    0.4000    0.0852    0.0615    0.0330    0.0108    
+
+Amyloid Pathway Comparison:
+------------------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      0.5014    0.1300    0.1074    0.0825    0.0224    
+Donepezil      0.6500    0.1552    0.1193    0.0787    0.0334    
+Galantamine    0.6000    0.1281    0.0934    0.0519    0.0234    
+
+Tau Pathway Comparison:
+------------------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      0.5034    0.1306    0.1086    0.0844    0.0272    
+Donepezil      0.6000    0.1434    0.1105    0.0734    0.0331    
+Galantamine    0.5500    0.1175    0.0860    0.0483    0.0236    
+
+Cholinergic Pathway Comparison:
+------------------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      N/A         N/A         N/A         N/A         N/A         
+Donepezil      1.0000    0.2407    0.1949    0.1437    0.1193    
+Galantamine    1.0000    0.2155    0.1677    0.1105    0.1109    
+
+NMDA Pathway Comparison:
+------------------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      1.0000    0.2604    0.2212    0.1784    0.0865    
+Donepezil      N/A         N/A         N/A         N/A         N/A         
+Galantamine    N/A         N/A         N/A         N/A         N/A         
+
+Summary for this condition:
+Rank by average efficacy:
+1. Donepezil: 0.1423
+2. Galantamine: 0.1181
+3. Memantine: 0.1166
+
+--------------------------------------------------------------------------------
+CONDITION: Normal
+--------------------------------------------------------------------------------
+
+Efficacy Comparison:
+-------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      0.3500    0.0909    0.0761    0.0599    0.0226    
+Donepezil      0.4500    0.1077    0.0837    0.0567    0.0299    
+Galantamine    0.4000    0.0856    0.0633    0.0366    0.0216    
+
+Amyloid Pathway Comparison:
+------------------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      0.5011    0.1303    0.1098    0.0872    0.0367    
+Donepezil      0.6500    0.1556    0.1217    0.0835    0.0478    
+Galantamine    0.6000    0.1285    0.0958    0.0567    0.0378    
+
+Tau Pathway Comparison:
+------------------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      0.4935    0.1284    0.1087    0.0870    0.0395    
+Donepezil      0.6000    0.1437    0.1127    0.0779    0.0464    
+Galantamine    0.5500    0.1178    0.0882    0.0527    0.0369    
+
+Cholinergic Pathway Comparison:
+------------------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      N/A         N/A         N/A         N/A         N/A         
+Donepezil      1.0000    0.2404    0.1932    0.1405    0.1096    
+Galantamine    1.0000    0.2152    0.1661    0.1072    0.1012    
+
+NMDA Pathway Comparison:
+------------------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      1.0000    0.2606    0.2227    0.1813    0.0952    
+Donepezil      N/A         N/A         N/A         N/A         N/A         
+Galantamine    N/A         N/A         N/A         N/A         N/A         
+
+Summary for this condition:
+Rank by average efficacy:
+1. Donepezil: 0.1456
+2. Galantamine: 0.1214
+3. Memantine: 0.1199
+
+--------------------------------------------------------------------------------
+CONDITION: LPL
+--------------------------------------------------------------------------------
+
+Efficacy Comparison:
+-------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      0.3500    0.0906    0.0743    0.0563    0.0118    
+Donepezil      0.4500    0.1074    0.0819    0.0531    0.0191    
+Galantamine    0.4000    0.0852    0.0615    0.0330    0.0108    
+
+Amyloid Pathway Comparison:
+------------------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      0.5011    0.1301    0.1084    0.0846    0.0288    
+Donepezil      0.6500    0.1554    0.1204    0.0809    0.0398    
+Galantamine    0.6000    0.1283    0.0945    0.0541    0.0299    
+
+Tau Pathway Comparison:
+------------------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      0.4935    0.1282    0.1075    0.0847    0.0327    
+Donepezil      0.6000    0.1435    0.1116    0.0756    0.0396    
+Galantamine    0.5500    0.1176    0.0871    0.0504    0.0301    
+
+Cholinergic Pathway Comparison:
+------------------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      N/A         N/A         N/A         N/A         N/A         
+Donepezil      1.0000    0.2406    0.1940    0.1419    0.1139    
+Galantamine    1.0000    0.2153    0.1668    0.1087    0.1055    
+
+NMDA Pathway Comparison:
+------------------------------
+Drug           Initial     Month 1     Month 6     Month 12    Month 36    
+Memantine      1.0000    0.2605    0.2219    0.1799    0.0908    
+Donepezil      N/A         N/A         N/A         N/A         N/A         
+Galantamine    N/A         N/A         N/A         N/A         N/A         
+
+Summary for this condition:
+Rank by average efficacy:
+1. Donepezil: 0.1423
+2. Galantamine: 0.1181
+3. Memantine: 0.1166
+
+================================================================================
+OVERALL COMPARISON SUMMARY
+================================================================================
+
+Global rank by average efficacy:
+1. Donepezil: 0.1434
+2. Galantamine: 0.1192
+3. Memantine: 0.1177
+
+Drug Mechanism Summary:
+-------------------------
+Memantine: NMDA receptor antagonist, primarily affects glutamatergic transmission
+Donepezil: Acetylcholinesterase inhibitor (AChEI), increases acetylcholine levels
+Galantamine: Dual mechanism - AChEI and allosteric modulator of nicotinic receptors

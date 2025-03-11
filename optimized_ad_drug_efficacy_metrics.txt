@@ -1,0 +1,51 @@
+================================================================================
+OPTIMIZED MODEL PERFORMANCE METRICS - 2025-03-10 17:01:18
+================================================================================
+
+--------------------------------------------------------------------------------
+MODEL INFORMATION
+--------------------------------------------------------------------------------
+Model ID:       RF_optimized_model_20250310-170106
+Training time:  20250310-170106
+Sample size:    57
+Grid search:    No (Using pre-optimized parameters)
+
+--------------------------------------------------------------------------------
+VALIDATION METRICS
+--------------------------------------------------------------------------------
+Mean Squared Error (MSE):        0.0040
+Root Mean Squared Error (RMSE):  0.0629
+Mean Absolute Error (MAE):       0.0533
+R-squared (R²):                  0.4209
+Pearson Correlation (r):         0.7002
+Correlation p-value:             0.0112
+
+--------------------------------------------------------------------------------
+CROSS-VALIDATION METRICS
+--------------------------------------------------------------------------------
+Mean R-squared (R²):             -0.0350
+Mean RMSE:                       0.0668
+Mean MAE:                        0.0585
+
+--------------------------------------------------------------------------------
+FULL DATASET METRICS
+--------------------------------------------------------------------------------
+Mean Squared Error (MSE):        0.0030
+Root Mean Squared Error (RMSE):  0.0547
+Mean Absolute Error (MAE):       0.0456
+R-squared (R²):                  0.5165
+Pearson Correlation (r):         0.7294
+Correlation p-value:             0.0000
+
+--------------------------------------------------------------------------------
+MODEL HYPERPARAMETERS (OPTIMIZED)
+--------------------------------------------------------------------------------
+n_estimators:                    1000
+max_depth:                       5
+min_samples_split:               2
+min_samples_leaf:                1
+max_features:                    0.3000
+ccp_alpha:                       0.0000
+
+Full parameter settings:
+{'n_estimators': 1000, 'max_depth': 5, 'min_samples_split': 2, 'min_samples_leaf': 1, 'max_features': 0.3, 'ccp_alpha': 0.0}

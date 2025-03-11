@@ -905,8 +905,12 @@ def extract_features(drug_targets, output_list, condition="APOE4"):
     # Combine all features
     return feature_vector + condition_features
 
-def collect_training_data(net, output_list, known_drugs=None, additional_data=None):
-   
+def collect_training_data(net, output_list, known_drugs=None, additional_data=None, baseline_attractors=None):
+    
+    # Validate baseline attractors
+    if baseline_attractors is None:
+        raise ValueError("baseline_attractors from main file MUST be provided")
+    
     X = []
     y = []
     drug_info = []  # Store additional information about each data point
@@ -920,88 +924,107 @@ def collect_training_data(net, output_list, known_drugs=None, additional_data=No
                            for target_info in DRUG_TARGETS[drug]]
                 
                 # Check if we have real clinical efficacy data
-                conditions = ["APOE4", "Normal"]  # Default conditions to test
+                conditions = ["APOE4", "Normal", "LPL"]  # Default conditions to test
                 
                 for condition in conditions:
+                    # Skip if we don't have baseline attractors for this condition
+                    if condition not in baseline_attractors:
+                        print(f"Skipping {condition} condition: no baseline attractors available")
+                        continue
+                        
                     # Skip if we don't have clinical data for this condition
                     if drug not in CLINICAL_EFFICACY or condition not in CLINICAL_EFFICACY[drug]:
-                        continue
+                        # For drugs with clinical data, we'll use that
+                        if drug in CLINICAL_EFFICACY:
+                            print(f"Skipping {drug} in {condition} condition: no clinical data available")
+                            continue
                     
-                    # Get real efficacy data
-                    clinical_efficacy = CLINICAL_EFFICACY[drug][condition]["efficacy"]
-                    
-                    # Extract features and add to training data
-                    features = extract_features(targets, output_list, condition)
-                    X.append(features)
-                    y.append(clinical_efficacy)
-                    drug_info.append({
-                        'name': drug,
-                        'targets': targets,
-                        'condition': condition,
-                        'efficacy': clinical_efficacy,
-                        'data_source': 'clinical_trial'
-                    })
-                    
-                    print(f"Added {drug} in {condition} condition with efficacy {clinical_efficacy:.4f}")
+                    # If we have clinical data, use it
+                    if drug in CLINICAL_EFFICACY and condition in CLINICAL_EFFICACY[drug]:
+                        clinical_efficacy = CLINICAL_EFFICACY[drug][condition]["efficacy"]
+                        
+                        # Extract features and add to training data
+                        features = extract_features(targets, output_list, condition)
+                        X.append(features)
+                        y.append(clinical_efficacy)
+                        drug_info.append({
+                            'name': drug,
+                            'targets': targets,
+                            'condition': condition,
+                            'efficacy': clinical_efficacy,
+                            'data_source': 'clinical_trial'
+                        })
+                        
+                        print(f"Added {drug} in {condition} condition with efficacy {clinical_efficacy:.4f}")
+                    else:
+                        # Get baseline for condition
+                        baseline = baseline_attractors[condition]
+                        
+                        # Simulate drug effect
+                        drug_state = simulate_drug_effect(
+                            net, output_list, 
+                            drug_name=drug, 
+                            condition=condition,
+                            baseline_attractors=baseline
+                        )
+                        
+                        # Calculate efficacy
+                        efficacy = calculate_efficacy(baseline, drug_state, output_list)
+                        sim_efficacy = efficacy['efficacy_score']
+                        
+                        # Add to training data
+                        features = extract_features(targets, output_list, condition)
+                        X.append(features)
+                        y.append(sim_efficacy)
+                        drug_info.append({
+                            'name': drug,
+                            'targets': targets,
+                            'condition': condition,
+                            'efficacy': sim_efficacy,
+                            'data_source': 'simulation'
+                        })
+                        
+                        print(f"Added simulated data for {drug} in {condition} condition with efficacy {sim_efficacy:.4f}")
     
-    # Add additional training data if provided
+    # Process additional empirical data from literature
     if additional_data:
-        for targets, efficacy_score, condition in additional_data:
-            features = extract_features(targets, output_list, condition)
-            X.append(features)
-            y.append(efficacy_score)
-            drug_info.append({
-                'name': f"Custom_{len(drug_info)}",
-                'targets': targets,
-                'condition': condition,
-                'efficacy': efficacy_score,
-                'data_source': 'additional_data'
-            })
+        for targets, efficacy, condition in additional_data:
+            # Validate condition
+            if condition not in ["APOE4", "Normal", "LPL"]:
+                print(f"Skipping empirical data: invalid condition {condition}")
+                continue
             
-            print(f"Added custom drug targeting {[t[0] for t in targets]} in {condition} condition")
-    
-    # Run simulations for drugs without clinical data
-    if known_drugs:
-        for drug in known_drugs:
-            if drug in DRUG_TARGETS:
-                targets = [(target_info["target"], target_info["effect"]) 
-                          for target_info in DRUG_TARGETS[drug]]
+            # Check baseline attractors
+            if condition not in baseline_attractors:
+                print(f"Skipping empirical data in {condition}: no baseline attractors")
+                continue
+            
+            # Extract features
+            try:
+                features = extract_features(targets, output_list, condition)
+                X.append(features)
+                y.append(efficacy)
+                drug_info.append({
+                    'name': 'Literature_Data',
+                    'targets': targets,
+                    'condition': condition,
+                    'efficacy': efficacy,
+                    'data_source': 'literature'
+                })
                 
-                conditions = ["APOE4", "Normal", "LPL"]
-                
-                for condition in conditions:
-                    # Skip if we already have clinical data for this condition
-                    if (drug in CLINICAL_EFFICACY and 
-                        condition in CLINICAL_EFFICACY[drug] and
-                        any(d['name'] == drug and d['condition'] == condition for d in drug_info)):
-                        continue
-                    
-                    # Get baseline for condition
-                    baseline = get_baseline_state(net, output_list, condition)
-                    
-                    # Simulate drug effect
-                    drug_state = simulate_drug_effect(net, output_list, drug_name=drug, condition=condition)
-                    
-                    # Calculate efficacy
-                    efficacy = calculate_efficacy(baseline, drug_state, output_list)
-                    sim_efficacy = efficacy['efficacy_score']
-                    
-                    # Add to training data
-                    features = extract_features(targets, output_list, condition)
-                    X.append(features)
-                    y.append(sim_efficacy)
-                    drug_info.append({
-                        'name': drug,
-                        'targets': targets,
-                        'condition': condition,
-                        'efficacy': sim_efficacy,
-                        'data_source': 'simulation'
-                    })
-                    
-                    print(f"Added simulated data for {drug} in {condition} condition with efficacy {sim_efficacy:.4f}")
+                print(f"Added literature data for condition {condition} with efficacy {efficacy:.4f}")
+            except Exception as e:
+                print(f"Error processing literature data for {condition}: {e}")
     
-    return np.array(X), np.array(y), drug_info
-
+    # Return data only if we have collected any samples
+    if X and y:
+        return np.array(X), np.array(y), drug_info
+    else:
+        print("WARNING: No training data collected")
+        print(f"Known drugs: {known_drugs}")
+        print(f"Additional data points: {len(additional_data) if additional_data else 0}")
+        return None
+    
 def save_model(model_data, filename="drug_efficacy_model.pkl"):
    
     with open(filename, 'wb') as f:
