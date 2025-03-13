@@ -389,11 +389,10 @@ class TemporalDrugSimulation:
         return temporal_results
     
     def _is_drug_in_targets(self, drug_name):
-        """Check if the drug is properly modeled in DRUG_TARGETS"""
         return drug_name in DRUG_TARGETS and len(DRUG_TARGETS[drug_name]) > 0
     
     def _get_custom_drug_targets(self, drug_name):
-        """Get custom targets for drugs not fully modeled in the network"""
+ 
         if drug_name == "Donepezil":
             return [
                 ("AChE", 0),           # Strong inhibition of acetylcholinesterase
@@ -428,24 +427,14 @@ class TemporalDrugSimulation:
                 ("Calpain", 0),        # Decreased calpain activation
                 ("TNFa", 0)            # Mild reduction in TNFa levels
             ]
-        elif drug_name == "Ritzaganine":
-            return [
-                ("BACE1", 0),          # Direct BACE1 inhibition
-                ("APP_processing", 0), # Reduced amyloidogenic processing of APP
-                ("Abeta_oligomers", 0), # Prevention of oligomer formation
-                ("GSK3beta", 0),       # GSK3β inhibition
-                ("Tau_phosphorylation", 0), # Reduced tau phosphorylation
-                ("Neuroinflammation", 0), # Anti-inflammatory effects
-                ("NF-kB", 0),          # Reduced NF-kB signaling
-                ("Microglia", 1)       # Enhanced microglial phagocytosis
-            ]
+       
         else:
             # For other drugs, return an empty list
             print(f"Warning: No custom targets defined for {drug_name}")
             return []
     
     def _adjust_efficacy_for_special_drugs(self, efficacy, drug_name, condition):
-        """Adjust efficacy calculations for drugs requiring special handling"""
+
         # Make a deep copy of the efficacy dict to avoid modifying the original
         adjusted_efficacy = {
             key: (value.copy() if isinstance(value, dict) else value) 
@@ -523,7 +512,7 @@ class TemporalDrugSimulation:
         return adjusted_efficacy
     
     def _adjust_drug_specific_temporal_effects(self, pathway_changes, drug_name, months):
-        """Adjusts pathway changes based on specific drug mechanisms over time"""
+  
         
         adjusted_changes = pathway_changes.copy()
         
@@ -952,17 +941,7 @@ class TemporalDrugSimulation:
         return max(0, min(composite, 1.0))
 
     def _predict_baseline_mmse_decline(self, condition, max_month):
-        """
-        Predict baseline MMSE score decline with realistic rates based on clinical literature.
-        
-        Args:
-            condition: Patient condition ("APOE4", "Normal", or "LPL")
-            max_month: Maximum month to simulate
-            
-        Returns:
-            List of MMSE scores at each month
-        """
-        import numpy as np
+
         
         # Initial MMSE based on condition - slightly lower for realism
         if condition == "APOE4":
@@ -1038,16 +1017,7 @@ class TemporalDrugSimulation:
 
 
     def _predict_mmse_from_simulation(self, temporal_results):
-        """
-        Predict MMSE scores using efficacy scores from the simulation in a more realistic way,
-        directly incorporating efficacy calculation data.
-        
-        Args:
-            temporal_results: Dictionary of temporal simulation results
-            
-        Returns:
-            Dictionary with treatment and no_treatment MMSE scores
-        """
+
         # Extract condition and drug information
         condition = temporal_results["condition"]
         drug_name = temporal_results["drug_info"]["name"]
@@ -1245,27 +1215,11 @@ class TemporalDrugSimulation:
         }
 
     def _predict_mmse_scores(self, temporal_results):
-        """
-        Predict MMSE scores based on comprehensive simulation data.
-        
-        Args:
-            temporal_results: Dictionary of temporal simulation results
-            
-        Returns:
-            Dictionary with treatment and no_treatment MMSE scores
-        """
+   
         return self._predict_mmse_from_simulation(temporal_results)
 
     def _calculate_cognitive_score(self, pathway_scores):
-        """
-        Calculate a cognitive score from pathway scores that relates to MMSE.
-        
-        Args:
-            pathway_scores: Dictionary of pathway scores from simulation
-            
-        Returns:
-            Cognitive score between 0-1
-        """
+
         # Define cognitive-relevant pathways
         cognitive_pathways = {
             'Synaptic': 0.25,
@@ -1304,15 +1258,7 @@ class TemporalDrugSimulation:
         return weighted_sum / total_weight
 
     def _get_disease_progression_rate(self, condition):
-        """
-        Calculate monthly MMSE decline rate dynamically based on simulation data.
-        
-        Args:
-            condition: Patient condition ("APOE4", "Normal", or "LPL")
-            
-        Returns:
-            Monthly MMSE decline rate derived from simulation progression rates
-        """
+ 
         # Extract progression rates for the specific condition
         condition_rates = self.progression_rates.get(condition, {})
         
@@ -1636,9 +1582,7 @@ class TemporalDrugSimulation:
 
     
     def _generate_mmse_plot(self, temporal_results, output_dir):
-        """
-        Generate a plot showing predicted MMSE scores with realistic clinical patterns.
-        """
+ 
         import numpy as np
         import matplotlib.pyplot as plt
         import matplotlib as mpl
@@ -1802,7 +1746,7 @@ class TemporalDrugSimulation:
 
             
     def _create_amyloid_clearance_plot(self, temporal_results, output_dir):
-        """Create a special plot for amyloid clearance and ARIA risk for anti-amyloid drugs"""
+
         drug_name = temporal_results["drug_info"]["name"]
         condition = temporal_results["condition"]
         timepoints = [0] + temporal_results["timepoints"]
@@ -1874,7 +1818,7 @@ class TemporalDrugSimulation:
         plt.close()
 
     def _create_cholinergic_metrics_plot(self, temporal_results, output_dir):
-        """Create a special plot for cholinergic metrics for AChE inhibitors"""
+
         drug_name = temporal_results["drug_info"]["name"]
         condition = temporal_results["condition"]
         timepoints = [0] + temporal_results["timepoints"]
@@ -1980,7 +1924,7 @@ class TemporalDrugSimulation:
         plt.close()
 
     def _create_excitotoxicity_plot(self, temporal_results, output_dir):
-        """Create a special plot for NMDA receptor effects for memantine"""
+
         drug_name = temporal_results["drug_info"]["name"]
         condition = temporal_results["condition"]
         timepoints = [0] + temporal_results["timepoints"]
@@ -2070,10 +2014,7 @@ class TemporalDrugSimulation:
         self._create_timepoint_comparison_matrix(temporal_results, output_dir)
     
     def _create_timepoint_comparison_matrix(self, temporal_results, output_dir):
-        """
-        Create a comparison matrix by combining existing individual timepoint plots.
-        This implementation ensures the combined plot exactly matches the individual plots.
-        """
+  
         import os
         import numpy as np
         import matplotlib.pyplot as plt
@@ -2196,10 +2137,7 @@ class TemporalDrugSimulation:
         print(f"Created comparison matrices for {drug_name} in {condition} condition")
         
     def _create_combined_drug_comparison(self, temporal_results, output_dir):
-        """
-        Create a comprehensive grid comparing biomarkers at key timepoints
-        by combining existing plot images rather than recreating them.
-        """
+
         import matplotlib.image as mpimg
         from matplotlib.gridspec import GridSpec
         
@@ -2257,15 +2195,7 @@ class TemporalDrugSimulation:
     
     @staticmethod
     def create_timepoint_grid(timepoint_results, output_dir, drug_name, condition):
-        """
-        Create a grid visualization showing all biomarkers across all timepoints.
-        
-        Args:
-            timepoint_results: Dictionary of results for each timepoint
-            output_dir: Base output directory
-            drug_name: Name of drug being simulated
-            condition: Patient condition (APOE4, Normal, etc.)
-        """
+
         import os
         import matplotlib.pyplot as plt
         import matplotlib.gridspec as gridspec
@@ -2409,15 +2339,7 @@ class TemporalDrugSimulation:
         return output_file
     
     def poster_graphs(self, timepoint_results, output_dir, drug_name, condition):
-        """
-        Create graphs for poster presentation with EXTREMELY DARK colors for visibility.
-        
-        Args:
-            timepoint_results: Dictionary of results for each timepoint
-            output_dir: Base output directory
-            drug_name: Name of drug being simulated
-            condition: Patient condition (APOE4, Normal, etc.)
-        """
+
         import os
         import matplotlib.pyplot as plt
         import matplotlib.gridspec as gridspec

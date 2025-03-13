@@ -10,6 +10,9 @@ from sklearn.model_selection import train_test_split, KFold, cross_val_score, Gr
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 from scipy.stats import pearsonr
 from math import sqrt
+import csv
+from scipy.stats import pearsonr
+
 
 from efficacy import (
     load_network, 
@@ -126,33 +129,6 @@ def create_empirical_dataset():
     return empirical_data
 
 def train_model(X, y, metrics_file="model_performance_metrics_1.txt"):
-    """
-    Trains a RandomForestRegressor model with hyperparameter tuning and outputs
-    comprehensive metrics to a file for later access.
-    
-    Parameters:
-    X (numpy.ndarray): Feature matrix
-    y (numpy.ndarray): Target vector
-    metrics_file (str): Path to text file where metrics will be saved
-    
-    Returns:
-    dict: Contains the trained model and performance metrics
-    """
-    # Standard libraries
-    import csv
-    import os
-    import time
-    from math import sqrt
-    
-    # Scientific computing
-    import numpy as np
-    import pandas as pd
-    from scipy.stats import pearsonr
-    
-    # Machine learning
-    from sklearn.ensemble import RandomForestRegressor
-    from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-    from sklearn.model_selection import train_test_split, KFold, cross_val_score, GridSearchCV
     
     # Get timestamp for model ID
     timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -453,15 +429,7 @@ def train_model(X, y, metrics_file="model_performance_metrics_1.txt"):
     }
 
 def _save_metrics_to_file(metrics_dict, filename="model_performance_metrics.txt"):
-    """
-    Helper function to save metrics to a nicely formatted text file
-    
-    Parameters:
-    metrics_dict (dict): Dictionary containing metrics to save
-    filename (str): Path to the text file
-    """
-    import os
-    import time
+
     
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(filename) if os.path.dirname(filename) else '.', exist_ok=True)
@@ -548,14 +516,7 @@ def _save_metrics_to_file(metrics_dict, filename="model_performance_metrics.txt"
         _save_metrics_to_csv_original(metrics_dict, csv_filename)
 
 def display_metrics_from_file(filename="model_performance_metrics.txt"):
-    """
-    Read metrics from a text file and display them in a readable format
-    
-    Parameters:
-    filename (str): Path to the text file with metrics
-    """
-    import os
-    
+   
     try:
         # Check if file exists
         if not os.path.exists(filename):
@@ -594,13 +555,6 @@ def display_metrics_from_file(filename="model_performance_metrics.txt"):
         return None
 
 def display_metrics_from_csv(filename):
-    """
-    Read metrics from a CSV file and display them (backward compatibility)
-    
-    Parameters:
-    filename (str): Path to the CSV file
-    """
-    import pandas as pd
     
     # Read the CSV file
     metrics_df = pd.read_csv(filename)
@@ -644,9 +598,7 @@ def display_metrics_from_csv(filename):
 
 # Keep the original CSV function for backward compatibility
 def _save_metrics_to_csv_original(metrics_dict, filename):
-    """Original CSV metrics saving function for backward compatibility"""
-    import os
-    import csv
+
     
     # Format numeric values
     formatted_metrics = {}
@@ -838,3 +790,5 @@ def training_pipeline(network_file="A_model.txt", model_file="ad_drug_efficacy_m
 if __name__ == "__main__":
     # Train the model and run temporal simulations
     results = training_pipeline()
+
+

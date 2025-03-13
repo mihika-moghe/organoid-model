@@ -34,12 +34,7 @@ from efficacy import (
 from temporal_simulation import TemporalDrugSimulation
 
 def create_empirical_dataset():
-    """
-    Create an empirical dataset from known drugs in clinical trials and additional literature data
-    
-    Returns:
-        list: List of tuples containing drug targets, efficacy, and condition
-    """
+
     empirical_data = []
     
     # Add data from known drugs in clinical trials
@@ -131,18 +126,7 @@ def create_empirical_dataset():
     return empirical_data
 
 def train_model_with_optimized_params(X, y, metrics_file="optimized_model_metrics.txt"):
-    """
-    Trains a RandomForestRegressor model with optimized hyperparameters and outputs
-    comprehensive metrics to a file for later access.
-    
-    Parameters:
-    X (numpy.ndarray): Feature matrix
-    y (numpy.ndarray): Target vector
-    metrics_file (str): Path to text file where metrics will be saved
-    
-    Returns:
-    dict: Contains the trained model and performance metrics
-    """
+
     # Standard libraries
     import csv
     import os
@@ -392,13 +376,7 @@ def train_model_with_optimized_params(X, y, metrics_file="optimized_model_metric
     }
 
 def _save_metrics_to_file(metrics_dict, filename="optimized_model_metrics.txt"):
-    """
-    Helper function to save metrics to a nicely formatted text file
-    
-    Parameters:
-    metrics_dict (dict): Dictionary containing metrics to save
-    filename (str): Path to the text file
-    """
+
     import os
     import time
     
@@ -487,7 +465,7 @@ def _save_metrics_to_file(metrics_dict, filename="optimized_model_metrics.txt"):
         _save_metrics_to_csv(metrics_dict, csv_filename)
 
 def _save_metrics_to_csv(metrics_dict, filename):
-    """CSV metrics saving function for backward compatibility"""
+
     import os
     import csv
     
@@ -526,13 +504,7 @@ def _save_metrics_to_csv(metrics_dict, filename):
         writer.writerow({k: formatted_metrics.get(k, metrics_dict.get(k)) for k in all_fields})
 
 def _generate_drug_comparison_report(temporal_results, output_dir):
-    """
-    Generate comparative analysis between Memantine, Donepezil, and Galantamine
-    
-    Parameters:
-    temporal_results (dict): Dictionary containing temporal simulation results
-    output_dir (str): Directory to save the comparison report
-    """
+
     import os
     import numpy as np
     import matplotlib.pyplot as plt
@@ -817,14 +789,7 @@ def _generate_drug_comparison_report(temporal_results, output_dir):
     return True
 
 def display_metrics_from_file(filename="optimized_model_metrics.txt"):
-    """
-    Read metrics from a text file and display them in a readable format
-    
-    Parameters:
-    filename (str): Path to the text file with metrics
-    """
-    import os
-    
+
     try:
         # Check if file exists
         if not os.path.exists(filename):
@@ -868,20 +833,7 @@ def display_metrics_from_file(filename="optimized_model_metrics.txt"):
 
 def optimized_training_pipeline(network_file="A_model.txt", model_file="optimized_ad_drug_efficacy_model.pkl", 
                      include_empirical=True, generate_plots=True, metrics_file="optimized_ad_drug_efficacy_metrics_2.txt"):
-    """
-    Pipeline to train an AD drug efficacy model using optimized hyperparameters
-    specifically focusing on Memantine, Donepezil, and Galantamine drugs.
-    
-    Parameters:
-    network_file (str): Path to the network model file
-    model_file (str): Path to save the trained model
-    include_empirical (bool): Whether to include empirical data
-    generate_plots (bool): Whether to generate plots
-    metrics_file (str): Path to save the metrics
-    
-    Returns:
-    dict: Dictionary containing model results and analysis data
-    """
+  
     print("=== Starting Optimized Alzheimer's Disease Drug Efficacy Model Training ===")
     
     # Step 1: Import main file results

@@ -29,16 +29,6 @@ import networkx as nx
 # - https://www.ebi.ac.uk/chembl/explore/compound/CHEMBL659
 
 DRUG_TARGETS = {
-    "Ritzaganine": [
-        {"target": "BACE1", "effect": 0, "mechanism": "Direct BACE1 inhibition, reducing Aβ production", 
-         "affinity": "12 nM", "confidence": 0.92, "potency": "IC50=8.2 nM"},
-        {"target": "Abeta_oligomers", "effect": 0, "mechanism": "Prevents oligomer formation", 
-         "affinity": "25 nM", "confidence": 0.89, "potency": "EC50=18.5 nM"},
-        {"target": "GSK3beta", "effect": 0, "mechanism": "Moderate GSK3β inhibition, reducing tau phosphorylation", 
-         "affinity": "120 nM", "confidence": 0.78, "potency": "IC50=95 nM"},
-        {"target": "Neuroinflammation", "effect": 0, "mechanism": "Reduces inflammatory cytokine production", 
-         "affinity": "indirect", "confidence": 0.73, "potency": "indirect"}
-    ],
     "Memantine": [
         {"target": "NMDAR", "effect": 0, "mechanism": "Non-competitive NMDA receptor antagonist, preferential blockade of extrasynaptic receptors", 
          "affinity": "500 nM (IC50)", "confidence": 0.92, "potency": "Ki=510 nM"},
@@ -226,22 +216,7 @@ CLINICAL_EFFICACY = {
 
 # Update PHARMACOKINETICS dictionary
 PHARMACOKINETICS = {
-    "Ritzaganine": {
-        "molecular_weight": 498.6,  # Daltons
-        "half_life": 36,  # hours
-        "bioavailability": 0.72,  # Good oral bioavailability
-        "protein_binding": 0.92,  # 92% protein binding
-        "clearance": 0.027,  # L/hr/kg
-        "volume_distribution": 4.85,  # L/kg
-        "administration": "oral",
-        "dosing_interval": 24,  # hours (daily dosing)
-        "bbb_penetration": 0.38,  # Blood-brain barrier penetration ratio
-        "steady_state": 7*24,  # hours to steady state (7 days)
-        "active_metabolites": True,  # Has active metabolites
-        "excretion": "hepatic",  # Primary clearance mechanism
-        "liver_metabolism": 0.85,  # 85% hepatic metabolism
-        "renal_clearance": 0.15  # 15% renal clearance
-    },
+    
     "Memantine": {
         "molecular_weight": 179.3,  # Daltons
         "half_life": 70,  # hours
@@ -376,20 +351,7 @@ def load_network(network_file="A_model.txt"):
     }
 
 def get_baseline_state(net, output_list, condition="Normal"):
-    """
-    Get baseline state for a specific condition using the network model.
-    This updated function directly runs the attractors calculation without
-    falling back to predefined values.
     
-    Args:
-        net: Boolean network model
-        output_list: List of genes/nodes in the network
-        condition: "Normal", "APOE4", or "LPL"
-        
-    Returns:
-        Attractors data for the specified condition
-    """
-    import time
     print(f"\nGetting baseline for {condition} condition...")
     start_time = time.time()
     
@@ -494,18 +456,7 @@ def simulate_drug_effect(net, output_list, drug_name=None, drug_targets=None, co
     return drug_attractors
 
 def calculate_efficacy(baseline_attractors, drug_attractors, output_list):
-    """
-    Calculate efficacy metrics for a drug treatment with improved methodology
-    based on network attractor states.
     
-    Args:
-        baseline_attractors: Attractors for baseline (untreated) condition
-        drug_attractors: Attractors for treated condition
-        output_list: List of all nodes in the network
-        
-    Returns:
-        Dictionary of efficacy metrics
-    """
     # Extract state matrices
     baseline_states = baseline_attractors['attractors']
     drug_states = drug_attractors['attractors']
@@ -1058,20 +1009,7 @@ def predict_efficacy(model_data, drug_targets, condition="APOE4"):
     return prediction
 
 def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", drug_name=None, timepoint=None):
-    """
-    Generate realistic brain PET scan data based on disease condition, drug effects, and timepoint.
-    Each timepoint will produce uniquely different results that reflect realistic drug effects.
     
-    Args:
-        node_changes: Dictionary of changes in node values
-        condition: Patient condition ("APOE4", "Normal", or "LPL")
-        stage: Treatment stage ("baseline" or "post_treatment" or "month_X")
-        drug_name: Name of drug (optional)
-        timepoint: Time in months (optional)
-        
-    Returns:
-        Dictionary of PET data by brain region
-    """
     # Extract month from stage if timepoint not provided
     if timepoint is None and stage.startswith("month_"):
         try:
@@ -1600,25 +1538,7 @@ def generate_brain_pet_scan(node_changes, condition="APOE4", stage="baseline", d
                 metabolism_change *= metabolism_time_factor
             
             # Add drug-specific temporal and regional effects
-            if drug_name == "Ritzaganine":
-                # BACE1 inhibitor shows more uniform regional effects than antibodies
-                if timepoint >= 0.5 and timepoint <= 3:
-                    # Rapid initial effect
-                    initial_boosting = min(0.2, 0.1 * timepoint)
-                    amyloid_change = amyloid_change * (1.0 + initial_boosting)
-                    
-                # Tau effects develop more gradually
-                if timepoint > 2 and timepoint <= 9:
-                    # GSK3beta effects on tau gradually build
-                    tau_enhancement = min(0.25, 0.05 * timepoint)
-                    tau_change = tau_change * (1.0 + tau_enhancement)
-                    
-                # Protection from atrophy increases with time
-                if timepoint > 3:
-                    protection_factor = min(0.3, 0.03 * timepoint)
-                    atrophy_change = atrophy_change * (1.0 + protection_factor)
-                
-            elif drug_name == "Memantine":
+            if drug_name == "Memantine":
                 # Memantine works better in more advanced disease
                 if region in ['hippocampus', 'entorhinal_cortex']:
                     # Greater effect on protecting hippocampal circuits
